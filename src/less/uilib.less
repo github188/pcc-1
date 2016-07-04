@@ -1,0 +1,173 @@
+
+[class^="btn-"], [class*=" btn-"] {
+	display:inline-block; width:75px;height:30px;line-height:30px;.x-pic;
+}
+[class^="btn-"]:hover, [class*=" btn-"]:hover{}
+[class^="btn-"].disable, [class*=" btn-"].disable{}
+.btn-refresh {
+	padding : 10px 9px;.x-pic-btn-refresh;
+}
+.btn-refresh:hover{.x-pic-btn-refresh-hover;}
+.btn-refresh:active{.x-pic-btn-refresh-click;}
+.btn-delete{.x-pic-btn-delete;}
+.btn-delete:hover{.x-pic-btn-delete-hover;}
+.btn-delete:active{.x-pic-btn-delete-click;}
+.btn-delete.disable{.x-pic-btn-delete-disable;}
+.btn-add{.x-pic-btn-add;}
+.btn-add:hover{.x-pic-btn-add-hover;}
+.btn-add:active{.x-pic-btn-add-click;}
+.btn-edit {}
+.btn-cancel {}
+.btn-filter{width:52px;height:30px;line-height:30px;.x-pic-btn-filter;}
+.btn-filter:hover{.x-pic-btn-filter-hover;}
+.btn-filter:active{.x-pic-btn-filter-click;}
+.btn-filter.disable{.x-pic-btn-filter-disable;}
+.btn-handle{width:106px;height:30px;line-height:30px;.x-pic-btn-handle;}
+.btn-handle:hover{.x-pic-btn-handle-hover;}
+.btn-handle:active{.x-pic-btn-handle-click;}
+.btn-handle.disable{.x-pic-btn-handle-disable;}
+.btn-backto{width:66px;height:26px;.x-pic-btn-backTo;}
+.btn-backto:hover{.x-pic-btn-backTo-hover;}
+.btn-backto:active{.x-pic-btn-backTo-click;}
+.btn-import, .btn-stop, .btn-submit{.x-pic-btn-bg;}
+.btn-import:hover, .btn-stop:hover, .btn-submit:hover{.x-pic-btn-bg-hover;}
+.btn-import:active, .btn-stop:active, .btn-submit:active{.x-pic-btn-bg-click;}
+.btn-import.disable, .btn-stop.disable, .btn-submit.disable{.x-pic-btn-bg-disable;}
+
+[class^="act-"], [class*=" act-"] {.x-pic; width:24px; height:24px;margin-left:10px;}
+
+.act-delete{.x-pic-act-delete;}
+.act-delete:hover{.x-pic-act-delete-hover;}
+.act-delete.disable{.x-pic-act-delete-disable;}
+.act-config{.x-pic-act-config;}
+.act-config:hover{.x-pic-act-config-hover;}
+.act-config.disable{.x-pic-act-config-disable;}
+.act-edit{.x-pic-act-edit;}
+.act-edit:hover{.x-pic-act-edit-hover;}
+.act-priority{.x-pic-act-priority;}
+.act-priority:hover{.x-pic-act-priority-hover;}
+.act-priority.disable{.x-pic-act-priority-disable;}
+.act-submit{.x-pic-act-submit;}
+.act-submit:hover{.x-pic-act-submit-hover;}
+.act-stop{.x-pic-act-stop;}
+.act-stop:hover{.x-pic-act-stop-hover;}
+.act-stop.disable{.x-pic-act-stop-disable;}
+#nv-dialogAlert{z-index : 20001;}
+.ixw-modal-dialog{
+	z-index : 20000;
+	*{font-size :12px;}
+	.area>div{padding-top:15px;}
+	.ixw-body{width : 460px; border-radius:5px;}
+	.title {
+		height:45px;padding:15px 0px 0px 26px; font-size:14px; color:#597a96;font-weight:bold;background: #d1f3ff;
+		border-radius: 5px;
+	}
+	.requiredMark{border:1px solid red;}
+	.area{
+		padding-top:10px;color:#597a96;position: relative;
+		.ixw-dpt{
+			display: inline-block;
+			a{width : 240px; height: 30px;border:1px solid #61d4ff;}
+			a.requiredMark{border:1px solid red;}
+			input{width:210px;height: 28px;margin:0;}
+			label{width:120px;line-height: 30px;vertical-align: top; text-align:right;padding-right: 15px;margin-bottom: 0;}
+		}
+		.label{
+			display:inline-block;width:120px;height:30px;line-height:30px;text-align:right; padding:0;vertical-align:top;padding-right: 15px;
+			font-weight:normal;color:#597a96;
+		}
+		textarea{width:240px;height:60px;border:1px solid #61d4ff;}
+
+		.mark{background: transparent;color:red;display: inline-block;height: 30px;line-height: 30px;padding: 0 5px;vertical-align: top;}
+		.marktext{display:inline-block; height:30px;line-height:30px;vertical-align:top;}
+		.marktext.limitMark{color:red;}
+		.dtInput{height:30px;width:85px;vertical-align: top;border:1px solid #61d4ff;}
+		.dtInput.requiredMark, textarea.requiredMark{border:1px solid red;}
+		.dpt.mark{margin-top:15px;}
+		.dtText{vertical-align:top;line-height: 30px;padding:0 15px 0 8px;}
+		.dtText.last{padding-right: 5px;}
+		&>div.opacity{
+			opacity: 0.5;
+			.mark{display: none;}
+		}
+		.recycle-mask{position: absolute;width:460px;height: 30px;left:0;top:72px;}
+	}
+
+	.dropdown{
+		display:inline-block;
+		.dropdown-toggle{
+			display:inline-block; width : 240px;height:30px;position:relative;
+			border : 1px solid #61d4ff;background: #fff;text-align: left;padding-left: 10px;
+			span{position: absolute;top:0}
+			.value{;width:200px;height:30px;.x-ellipsis;vertical-align: top;}
+		}
+		.requiredMark{border:1px solid red;}
+		.dropdown-toggle.little, .dropdown-menu.little{width:84px;}
+		.value{line-height: 30px;}
+		.drop-pic{
+			position:absolute;right:10px;margin-top:12px;
+			width:8px;height:5px;.x-pic;.x-pic-dropdown;
+		}
+		.dropdown-menu{
+			width:240px;max-height:200px;min-width:50px;overflow-y:auto;overflow-x:hidden;margin-bottom:5px;border:1px solid #afd7af;
+			li{	height:20px;line-height:20px;}
+			li.hover,a:hover{background:#e8e8e8;}
+			a{width:100%;height:17px;.x-ellipsis;color:#404040;padding:0 5px;}
+		}
+		.dropdown-menu.little a{width:83px;}
+	}
+
+	.btn {width:75px;height:30px;line-height:30px;color:#fff;border-radius:2px;margin:0 3px;padding:0;}
+	.btns{
+		/* padding:45px 40px 20px; */text-align:center;
+	}
+	.confirmDialog{
+		.msg {text-align:center;}
+	}
+}
+
+.nv-chart{
+	background:#f7f7f7;padding:50px 60px;position:relative;
+
+	a {
+		float:right;display: block; background: #11B1EC; color:#fff;
+		text-align:center; 
+		width: 75px;height: 30px;margin:0 0 15px 5px;line-height: 30px;
+	}
+	a.actived{background:#80c61e; color:#fff;}
+	.nvc-type{display: none;}
+	.nvc-type.actived{display: block;}
+	.nvc-type>a{
+		float:left;background: #fff;color:#b9b9b9;font-size:12px;
+		border: 1px solid #80c821;line-height: 28px;
+		width: 95px;margin:0 10px 15px 0;
+
+		&.actived{background:#80c61e; color:#fff;}
+	}
+	.nvc-area {
+		clear:both;background:#fff; padding:30px; height:440px;
+	}
+	.nvc-foot{
+		display: block; background:white; margin-top:-20px;height:60px;text-align:center;
+		span {display:inline-block; width:40px;height:30px;vertical-align:middle;}
+		.cpu{background:#72D1EE;}
+		.mem{background:#CCE7F6;}
+		.cpu-txt, .mem-txt{margin:5px 30px 5px 15px;height:20px; width:30px;font-size:12px;}
+		.mem-txt{margin-right: 0;}
+	}
+	.chartbtn{
+		position:absolute;width:60px;
+		a{float:none; width:21px; height: 43px; background:none; /* .x-pic; */margin:0 20px;}
+		&.prev{left:0%;top:45%;}
+		/* &.prev a{.x-pic-chart-prev;}
+		&.prev a:hover{.x-pic-chart-prev-hover;} */
+		&.next{left:100%;top:45%;margin-left:-60px;}
+	/* 	&.next a{.x-pic-chart-next;}
+	&.next a:hover{.x-pic-chart-next-hover;} */
+	}
+}
+
+.nv-pie{
+	.nvc-pie{ height:515px; }
+}
+

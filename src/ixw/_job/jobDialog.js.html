@@ -1,0 +1,121 @@
+<script>
+var showDialog = NV.Dialog.show;
+var hideDialog = NV.Dialog.hide;
+var dropdownBox = PCC.inputBox.dropdownBox();
+var globalActionConfig = IXW.Actions.configActions;
+var caller = PCC.Global.jobCaller;
+
+var jobCfg = {
+	algorithm : {inputId : "dlgAlgorithm", inputClz : "required"}
+};
+</script>
+<tpl id="job">
+	<div class="area">
+		<div>
+			<span class="label">算法模块</span>{algorithmHTML}<span class='mark'>*</span>
+		</div>
+		<div>
+			<span class="label">作业参数</span><span></span><textarea id="param" class="required"></textarea><span class='mark'>*</span>
+		</div>
+	</div>
+</tpl>
+<script>
+globalActionConfig([["jobDialog.chose",function(params, el){
+	var dropdownEl = $XH.ancestor(el, "dropdown");
+	if(!dropdownEl) return;
+	var value = el.innerHTML === "空" ? "" :el.innerHTML;
+	var key = params.key;
+	var valueEl = $XH.first($XH.first(dropdownEl, "dropdown-toggle"), "value");
+	var inputEl = $XD.first(dropdownEl, "input");
+	inputEl.value = value;
+	valueEl.innerHTML = value;
+}]]);
+var from =0, to=0;
+
+function isInputNull(inputEl, aEl){
+	var value = inputEl.value;
+	$XH[value ? "removeClass":"addClass"](aEl, "requiredMark");
+}
+function bindOnValve(contentEl){
+	dropdownBox.bindOnMouseWheelAndHover(contentEl);
+	var inputs = jQuery(contentEl).find("input.required");
+	IX.map(inputs, function(el){
+		dropdownBox.bindonDropdown(el);
+	});
+	var textareas = jQuery(contentEl).find("textarea.required");
+	IX.map(textareas, function(textarea){
+		IX.bind(textarea, {
+			blur : function(){
+				$XH[textarea.value ? "removeClass" : "addClass"](textarea, "requiredMark");
+			}
+		});
+	});
+}
+
+function vertifyRequired(){
+	var flag = true,value = "";
+	var inputEl = jQuery(".area input.required")[0];
+	var dropdownEl = $XH.first($XH.ancestor(inputEl, "dropdown"), "dropdown-toggle");
+	var inputValue = dropdownBox.isInputNull(inputEl, dropdownEl);
+	if(inputValue ==="") flag = false;
+	IX.map(jQuery(".area textarea.required"), function(el){
+		if(el.value === ""){
+			flag = false;
+		}
+		$XH[el.value=== "" ? "addClass" : "removeClass"](el, "requiredMark");
+	});
+	return flag;
+}
+function exportFn(){
+	var flag = vertifyRequired();
+	if(flag){
+		var algorithm = $X('dlgAlgorithm').value;
+		var param = $X('param').value;
+		var $form = jQuery('<form id="form" action="/job/download" method="POST" style="display:none"></form>');
+		$form.append(jQuery('<input type="text" name="algorithm" value="' + algorithm + '">'))
+			.append(jQuery('<input type="text" name="param" value="' + param + '">'))
+			.append(jQuery('<input type="submit">'))
+			.appendTo(jQuery("#body"));
+		$form.submit();
+	}
+}
+function submitJob(okFn, btndisableFn){
+	var flag = vertifyRequired();
+	if(flag){
+		var algorithm = $X('dlgAlgorithm').value;
+		var param = $X('param').value;
+		if(IX.isFn(btndisableFn)) btndisableFn();
+		okFn({
+			algorithm : algorithm,
+			param : param
+		}, function(){
+			hideDialog();
+		});
+	}
+}
+
+IX.ns("PCC.jobDialog");
+PCC.jobDialog.addJob = function(okFn){
+	caller("getAlgoritms", {}, function(data){
+		showDialog({
+			//clz : "jobDialog",
+			title : "新建作业",
+			content : t_job.renderData("",{
+				algorithmHTML : dropdownBox.getDropdownBoxHTML("",jobCfg.algorithm, data.algorithm,"jobDialog.chose", true)
+			}),
+			listen : {
+				ok : function(btndisableFn){submitJob(okFn, btndisableFn);},
+				export : exportFn
+			},
+			btns : {
+				left : [],
+				right : [{name:"ok", text: "确定"}, {name:"export", text:"导出"}, {name:"cancel", text:"取消"}] 
+			},
+			bindOn : function(contentEl){
+				bindOnValve(contentEl);
+			}
+		});
+	});
+};
+
+</script>

@@ -1,0 +1,561 @@
+<script>
+var overCaller = PCC.Global.overviewCaller;
+var periodic = PCC.Util.PeriodicChecker;
+var Duration = 3; //3sec
+var checker = null;
+var model = null;
+var cpuChart, memChart, nodeChart;
+
+var constKeys = ["fault", "used", "free"];
+var textConst = {
+	mem: ["故障内存", "使用内存", "未使用内存"],
+	node: ["故障节点", "使用节点", "未使用节点"]
+};
+var colorArr = ["#f24f79","#10b9f7", "#78858c"];
+
+var options = {
+	cpu : {
+		title: {
+			subtext: "CPU使用记录",
+			subtextStyle: {
+				color: "#78858c",
+				fontFamily: "宋体",
+				fontSize: 12
+			},
+			left: "9%",
+			top: 0
+		},
+		grid: {
+			right: "12%"
+		},
+		tooltip: {
+			trigger: 'axis',
+			formatter: "{b}<br />{a}{c}%",
+			axisPointer: {lineStyle: {color: "#afa"}}
+		},
+		legend: {
+			right: "12%",
+			top: 27,
+			// selectedMode : false,
+		    data:[{
+		    	name: "当前使用百分比：",
+		    	icon: "image://../src",
+		    	textStyle: {
+		    		color: "#78858c",
+		    		fontSize: 12,
+		    		fontFamily: "宋体"
+		    	}
+		    }]
+		},
+		xAxis: [{
+	        type: 'category',
+	        boundaryGap: false,
+	        splitLine: {show: false},
+	        nameTextStyle: {color: "#343f43"},
+	        axisLabel: {show: false},
+            axisTick: {show: false}
+		}],
+		yAxis: [{
+	        type: 'value',
+	        position:"right",
+	        splitLine: {show:false},
+	        nameTextStyle: {
+	        	color: "#0ebaf7",
+	        	fontFamily: "宋体",
+	        	fontSize: 12
+	        },
+	        axisLabel: {
+	        	formatter: '{value} %',
+	        	textStyle: {color: "#78858c"}
+	        },
+            axisTick: {show:false},
+            max: 100,
+            min: 0
+	    },{
+	        type: 'value',
+	        position:"right",
+	        nameTextStyle: {color: "#343f43"},
+	        axisLine: {show: false},
+	        splitLine: {show: false},
+            axisTick: {show: false},
+            axisLabel: {show: false}
+		}],
+		animationEasingUpdate: "circularOut",
+		series: [{
+	        name:'当前使用百分比：',
+	        type:'line',
+	        lineStyle: {normal: {color: "#0ebaf7"}},
+	        itemStyle: {
+	        	normal: {color: "#0ebaf7", borderWidth: 1}
+	        }
+		}]
+	},
+	mem : {
+		tooltip: {
+		    trigger: 'item',
+		    formatter: "{b}: {c} ({d}%)"
+		},
+	    color: colorArr,
+	    series: [{
+            name: "",
+            type: 'pie',
+            radius: ['50%', '70%'],
+            itemStyle: {
+            	normal: {
+            		borderColor: "#343f43",
+            		borderWidth: 3
+            	}
+            }
+	    }]
+	},
+	node : {
+		tooltip : {
+			trigger: "item",
+			formatter: "{b}: {c}%",
+			position: function(point, params, dom){
+				return [point[0]+10, point[1]-40];
+			}
+		},
+		grid: {
+			left: "12%",
+			top: "15%"
+		},
+		xAxis: [{
+	        type: 'category',
+	        splitLine: {show: false},
+	        nameTextStyle: {color: "#343f43"},
+	        axisLabel: {show: false},
+            axisTick: {show: false},
+            axisLine: {lineStyle: {color: "#3d464a"}}
+		}],
+		yAxis: [{
+	        type: 'value',
+	        splitLine: {show:false},
+	        nameTextStyle: {
+	        	color: "#0ebaf7",
+	        	fontFamily: "宋体",
+	        	fontSize: 12
+	        },
+	        axisLine: {lineStyle: {color: "#3d464a"}},
+	        axisLabel: {
+	        	formatter: '{value} %',
+	        	textStyle: {color: "#78858c"}
+	        },
+            axisTick: {show:false},
+            max: 100,
+            min: 0
+		},{
+	        type: 'value',
+	        splitLine: {show:false},
+	        axisLine: {lineStyle: {color: "#3d464a"}},
+	        axisLabel: {
+	        	formatter: '{value}',
+	        	textStyle: {color: "#78858c"}
+	        },
+            axisTick: {show:false},
+            min: 0
+	    }],
+		series: [{
+			type: "bar",
+			barMaxWidth: 100,
+			barMinHeight: 2,
+			label: {
+                normal: {
+                    show: true,
+                    position: 'top',
+                    formatter: "{c}%",
+                    textStyle: {fontSize: 14, fontWeight: "bold", fontFamily: "Arial"}
+                }
+            }
+		}]
+	}
+};
+
+function DataModel(data){
+	var modelData = IX.clone(data);
+	var cpuArr = [], memArr = [], nodeArr = [];
+
+	function _getTplData(){
+		IX.iterate(modelData.cpu, function(cpu, idx){
+			cpuArr.push({
+				name: cpu.usage + "%",
+				value : cpu.usage,
+				time: new Date(cpu.time).toLocaleTimeString().replace(/^\D*/, "")
+			});
+			if (cpuArr.length > 60)
+				cpuArr.shift();
+		});
+		memArr = IX.map(textConst.mem, function(text, idx){return {name: text, value: modelData.mem[constKeys[idx]]};});
+		nodeArr = IX.map(textConst.node, function(text, idx){
+			var value = modelData.node[constKeys[idx]];
+			return {
+				name: text, 
+				value: value,
+				percent: Math.round(modelData.node[constKeys[idx]] / modelData.node.all * 100)
+			};
+		});
+		var lastCpu = modelData.cpu[modelData.cpu.length-1];
+		return {
+			cpu : IX.loop(cpuArr, {time: [],value: []}, function(obj, item, idx){
+				obj.name = item.name;
+				obj.value.push(item.value);
+				obj.time.push(item.time);
+				return obj;
+			}),
+			mem : memArr,
+			node : {
+				all: modelData.node.all,
+				arr: nodeArr
+			},
+			flow : modelData.flow,
+			job : modelData.job,
+			const : {
+				allCpu : lastCpu.all,
+				usedCpu : lastCpu.used,
+				freeCpu : lastCpu.free,
+				faultCpu : lastCpu.fault,
+				allMem : modelData.mem.all,
+				memItems : IX.map(constKeys, function(key, idx){
+					return {clz: "icon-"+key, text: textConst.mem[idx]};
+				}),
+				node: {
+					all: modelData.node.all,
+					items: IX.map(nodeArr, function(node, idx){
+						return {
+							clz: constKeys[idx],
+							text: node.name,
+							value: node.value
+						};
+					})
+				},
+				flow : modelData.flow,
+				job : modelData.job
+			}
+		};
+	}
+	return {
+		getTplData : _getTplData,
+		refresh : function(data){modelData = IX.clone(data);},
+		destory: function(){
+			modelData = null;
+			cpuArr = []; 
+			memArr = [];
+			nodeArr = [];
+		}
+	};
+}
+
+/*
+	cfg : {
+		container,
+		getTplData : function(defaultOption, data){}
+	}
+*/
+function PccCharts(cfg){
+	var key = $XP(cfg, "container", "body");
+	var el = $X(key);
+	var groupChart = echarts.init(el);
+	var defaultOption = options[key];
+	var getTplData = $XF(cfg, "getTplData");
+	return {
+		show: function(data){
+			groupChart.setOption(getTplData(defaultOption, data));
+		}
+	};
+}
+</script>
+<tpl id="overview">
+	<div class="p-overview">
+		<div class="left-bottom">
+			<div class="panels cpu">
+				<div class="title"><div class="title-cpu"></div></div>
+				<div class="division"></div>
+				<div class="container-body">
+					<div class="cpu-left"></div>
+					<div id="cpu" class="cpu-right"></div>
+					<div class="cpu-bg"></div>
+				</div>
+			</div>
+		</div>
+		<div class="left-bottom">
+			<div class="panels mem">
+				<div class="title"><div class="title-mem"></div></div>
+				<div class="division"></div>
+				<div class="container-body">
+					<div id="mem"></div>
+					<div class="mem-bg"></div>
+					<div class="mem-legend"></div>
+				</div>
+			</div>
+		</div>
+		<div class="left-bottom">
+			<div class="panels node">
+				<div class="title"><div class="title-node"></div></div>
+				<div class="division"></div>
+				<div class="container-body">
+					<div id="node" class="node-left"></div>
+					<div class="node-bg"></div>
+					<div class="node-right"></div>
+				</div>
+			</div>
+		</div>
+		<div class="panels both">
+			<div class="left-bottom">
+				<div class="flow">
+					<div class="title"><div class="title-flow"></div></div>
+					<div class="division"></div>
+					<div id="flow"></div>
+				</div>
+			</div>
+			<div class="left-bottom">
+				<div class="job">
+					<div class="title"><div class="title-job"></div></div>
+					<div class="division"></div>
+					<div id="job"></div>
+				</div>
+			</div>
+		</div>
+	</div>
+</tpl>
+
+<tpl id="cpuConst">
+<div class="cpu-all">
+	<span class="all">{allCpu}</span>
+	<span>/核</span>
+</div>
+<div>CPU总量</div>
+<div class="cpu-bottom">
+	<div class="cpu-used">
+		<div class="public">{usedCpu}</div>
+		<div class="text">被使用</div>
+	</div>
+	<div class="cpu-free">
+		<div class="public">{freeCpu}</div>
+		<div class="text">未使用</div>
+	</div>
+	<div class="cpu-fault">
+		<div class="public">{faultCpu}</div>
+		<div class="text">不可用</div>
+	</div>
+</div>
+</tpl>
+
+<tpl id="memConst">
+<div class="public">内存总量</div>
+<div class="all-mem">{allMem}</div>
+<div class="unit">/GB</div>
+</tpl>
+
+<tpl id="memLegend">
+<div>
+	<tpl id="memItems"><span class="{clz}"></span>{text}</tpl>
+</div>
+</tpl>
+
+<tpl id="nodeConst">
+<span class="all">{all}</span>
+<div class="text">计算节点总量</div>
+<div class="node-bottom"><tpl id="items">
+	<div class="node-{clz}">
+		<div class="lt">
+			<span class="icon-pic"></span>{text}
+		</div>
+		<div class="public">{value}</div>
+	</div></tpl>
+</div>
+</tpl>
+
+<tpl id="flowConst">
+<div class="public {clz}">
+	<div>
+		<span class="icon"></span>
+		<span class="value">{value}</span>
+		<span class="unit">Mbps</span>
+	</div>
+	<div class="text">{text}</div>
+</div>
+</tpl>
+
+<tpl id="jobConst">
+<div class="public {clz}">
+	<div class="outside">
+		<div class="inside">
+			<span class="value">{value}</span>
+		</div>
+	</div>
+	<div class="text">{text}</div>
+</div>
+</tpl>
+<script>
+var constData = {
+	flow : {
+		renderData: t_flowConst.renderData,
+		clz : ["up", "down"],
+		text: ["上行流量", "下行流量"]
+	},
+	job : {
+		renderData: t_jobConst.renderData,
+		clz : ["task", "work"],
+		text : ["处理服务任务数量", "处理作业数量"]
+	}
+};
+
+function cpuChartShow(data){
+	if (!cpuChart) 
+		cpuChart = new PccCharts({
+			container : "cpu",
+			getTplData : function(defaultOption, data){
+				var option = IX.clone(defaultOption);
+				option.yAxis[0].name = data.name;
+				option.xAxis[0].data = data.time;
+				option.series[0].data = data.value;
+				return option;
+			}
+		});
+	cpuChart.show(data);
+}
+
+function memChartShow(data){
+	if (!memChart) 
+		memChart = new PccCharts({
+			container : "mem",
+			getTplData : function(defaultOption, data){
+				var option = IX.clone(defaultOption);
+				option.series[0].data = data;
+				option.series[0].label = {
+					normal : {formatter: "{b} {c} /GB \n 百分比 {d} %"}
+				};
+				return option;
+			}
+		});
+	memChart.show(data);
+}
+
+function nodeChartShow(data){
+	if (!nodeChart)
+		nodeChart = new PccCharts({
+			container : "node",
+			getTplData : function(defaultOption, data){
+				var option = IX.clone(defaultOption);
+				option.xAxis[0].data = IX.map(textConst.node, function(name){
+					return name;
+				});
+				option.series[0].name = "百分比";
+				option.yAxis[1].max = data.all;
+				if (data.all == 1)
+					option.yAxis[1].splitNumber = 1;
+				option.series[0].data = IX.map(data.arr, function(item, idx){
+					return {
+						name: item.name,
+						value: item.percent,
+						itemStyle: {normal: {color: colorArr[idx]}}
+					};
+				});
+				return option;
+			}
+		});
+	nodeChart.show(data);
+}
+
+function _getFlowOrJobData(data, obj, idx, key){
+	var unit = "MB/S";
+	if (key == "flow" && data > 1024) {
+		data = (data/1024).toFixed(2);
+		unit = "GB/S";
+	}
+	var theKey = obj.clz[idx];
+	return {
+		clz : theKey,
+		value : data[theKey],
+		text : obj.text[idx]
+	};
+}
+
+function showConst(tplData){
+	jQuery(".cpu-left").get(0).innerHTML = t_cpuConst.renderData("", tplData.const);
+	jQuery(".mem-bg").get(0).innerHTML = t_memConst.renderData("", tplData.const);
+	jQuery(".mem-legend").get(0).innerHTML = t_memLegend.renderData("", tplData.const);
+	jQuery(".node-right").get(0).innerHTML = t_nodeConst.renderData("", tplData.const.node);
+	function _showBoth(keys){
+		IX.iterate(keys, function(key){
+			jQuery("#"+key).get(0).innerHTML = IX.loop("0".multi(2).split(""), "", function(html, item, idx){
+				html += constData[key].renderData("", _getFlowOrJobData(tplData[key], constData[key], idx, key));
+				return html;
+			});
+		});
+	}
+	_showBoth(["flow", "job"]);
+}
+
+function processData(data){
+	if (!model) 
+		model = new DataModel(data);
+	else 
+		model.refresh(data);
+	var tplData = model.getTplData();
+	showConst(tplData);
+	cpuChartShow(tplData.cpu);
+	memChartShow(tplData.mem);
+	nodeChartShow(tplData.node);
+}
+
+function getData2Show(cbFn){
+	overCaller("getOverView", {}, function(data){
+		if (!$XH.hasClass(document.body, "overview")) return;
+		processData(data);
+		cbFn();
+	});
+}
+
+function resizeFn(){
+	var $body = jQuery("#body");
+	var bodyWidth = jQuery("#body").width();
+	var $cpubg = jQuery(".cpu-bg");
+	var $membg = jQuery(".mem-bg");
+	if (bodyWidth >= 1620 ) {
+		jQuery(".p-overview").width(1630).height(840);
+		$body.removeClass("centre").removeClass("small");
+	}else if (bodyWidth <= 1290) {
+		jQuery(".p-overview").width(1135).height(569);
+		$body.removeClass("centre").addClass("small");
+	}else {
+		jQuery(".p-overview").width(1320).height(660);
+		$body.addClass("centre").removeClass("small");
+	}
+	var containerWidth = jQuery(".p-overview").width() - 22;
+	var containerHeight = jQuery(".p-overview").height() - 14;
+	var averageWidth = Math.floor(containerWidth / 10);
+	var averageHeight = Math.floor(containerHeight / 2);
+	jQuery(".panels").width(averageWidth*5).height(averageHeight);
+	var bothHeight = averageHeight+3;
+	jQuery(".node").width(averageWidth*6);
+	jQuery(".both").width(averageWidth*4+11).height(bothHeight);
+	var balance = Math.floor(bothHeight / 3);
+	jQuery(".flow").width(averageWidth*4).height(balance);
+	jQuery(".job").width(averageWidth*4).height(bothHeight - balance - 14);
+	$cpubg.css({
+		backgroundImage : 'url('+PCC.Global.cpubgUrl+')',
+		backgroundSize : $cpubg.width()+"px"+" "+$cpubg.height()+"px"
+	});
+}
+
+function switchOut(){
+	cpuChart = null; memChart = null; nodeChart = null;
+	if (model) model.destory();
+	checker.stop();
+	jQuery("#body").removeClass("centre").removeClass("small");
+}
+
+IX.ns("PCC.Overview");
+PCC.Overview.init = function(pageCfg, pageParams, cbFn){
+	pageCfg.switchOut = switchOut;
+	$X('body').innerHTML = t_overview.renderData("",{});
+	if (!checker)
+		checker = new periodic(function(fn){
+			getData2Show(fn);
+		}, 3000);
+	checker.start();
+	// checker.stop();
+	resizeFn();
+};
+</script>

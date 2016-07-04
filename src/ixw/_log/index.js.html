@@ -1,0 +1,103 @@
+<script>
+var caller = PCC.Global.logCaller;
+var pccDialog = NV.Dialog;
+</script>
+<tpl id="page">
+<div id="gridTools" class="grid-tools"></div>
+<div id="gridContainer"></div>
+</tpl>
+<script>
+function refreshGrid(grid,pageNo){
+	var body = document.documentElement;
+	var screenY = body.clientHeight - $X('gridContainer').offsetTop;
+	var screenX = body.clientWidth - 280;
+	jQuery(".ixw-grid").addClass("opcity");
+	$X('refreshLoading').style.top = screenY/2-24 + "px";
+	$X('refreshLoading').style.left = screenX/2 -24  + "px";
+	$XH.removeClass($X('refreshLoading'), "hide");
+	grid.refresh(pageNo);
+}
+
+function switchOut(){
+	
+}
+
+function showLog(cbFn){
+	$X("body").innerHTML = t_page.renderData("", {});
+	var toDate = new Date().getTime();
+	var dtpDate = {
+		from : toDate - 90*24*60*60*1000,
+		to: toDate
+	};
+	var options = IX.inherit({status: -1}, dtpDate);
+	var tools = {
+		buttons: ["handle"],
+		type : "log",
+		search : true,
+		dpt : true,
+		filter : ["status"]
+	};
+	var grid = new PCC.Grid.NVGrid({
+		clz : "logGrid",
+		columns : [ "_checkbox","_no", "alarmDetail", "alarmStatus", "alarmDate"],
+		tools : tools,
+		container : "gridContainer",
+		dataLoader : function(params, cbFn){
+			caller("getLogs", IX.inherit(params, options), cbFn, function(){
+				switchOut();
+			});
+		},
+		onselect : function(){
+			var ids = [];
+			IX.map(grid.getSelectedRows(), function(rowModel){
+				if(!rowModel.get("status")) ids.push(rowModel.getId());
+			});
+			PCC.GridTools.enableTools("gridTools",ids.length>0);
+		}
+	});
+	PCC.Grid.currentGrid = {
+		handle: function(){
+			var ids = [];
+			IX.map(grid.getSelectedRows(), function(rowModel){
+				if(!rowModel.get("status"))
+					ids.push(rowModel.getId());
+			});
+			pccDialog.confirm("处理报警", "确认处理这些报警吗？", function(cbFn){
+				caller("handleAlarms", {ids : ids}, function(){
+					grid.setSelectedIdsNull();
+					grid.refresh();
+					pccDialog.hide();
+				});
+			});
+		},
+		filter : function(_options){
+			var type = $XP(_options, "type", "");
+			var value = $XP(_options, "key", "");
+			options[type] = value;
+			refreshGrid(grid,0);
+		},
+		"dtp-filter": function(){
+			IX.iterate(arguments, function(date){
+				var type = $XP(date, "type", "");
+				var value = $XP(date, "key", "");
+				options[type] = value;
+			});
+			refreshGrid(grid,0);
+		}
+	};
+	PCC.GridTools.showTools("gridTools", tools, IX.inherit({
+		status: []
+	}, dtpDate), "history");
+	PCC.Env.onResize4Body();
+	grid.show(/*function(){
+		updateGridInterval = setInterval(grid.refresh, 5000);
+	}*/);
+	cbFn();
+}
+IX.ns("PCC.Log");
+PCC.Log.init = function(pageCfg, pageParams, cbFn){
+	pageCfg.switchOut = switchOut;
+	PCC.Env.clearAlarmNum();
+	showLog(cbFn);
+};
+</script>

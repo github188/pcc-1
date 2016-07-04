@@ -1,0 +1,23 @@
+<html>
+<script>
+// begin： 实际运行中，没有用
+var qstr = location.search;
+qstr = qstr.indexOf("?")==0?qstr.substring(1) : "";
+qstr = qstr.indexOf("tkey=")>=0?qstr.split("tkey=")[1].split("&")[0]:"";
+var newSkey1 = {
+	"id" : "算法组名称-0",
+	"nodeId" : "0",
+	"name" : '新算法'
+};
+var newSkey = parent.Test.addAlgorithmNode(newSkey1);
+// end : 实际运行中，没有用
+
+parent.PCC.Algorithm.FileUploadedCB(qstr, { //tkey从Form/url数据中提取
+	retCode : 1, 
+	//err : "错误码".
+	data : {
+		
+	}
+});
+</script>
+</html>

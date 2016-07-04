@@ -1,0 +1,60 @@
+.ixw-grid{
+	font-size:12px;background:#fff;
+	a {color:#444;}
+	a:hover{text-decoration:none;cursor:pointer;}
+	ul{margin:0;padding-right:5px; border: 1px solid transparent;}
+	ul.hdr{background:#e8e8e8;
+		span{color:#888;font-weight: bold;}
+		li{/* border-right:1px solid white; */height:42px;line-height:42px;font-size: 14px;}
+	}
+	li{display:inline-block;text-align:center;vertical-align:middle;height:34px;line-height:34px;}
+	li span.pic-{display:inline-block;width:11px;height:13px;.x-pic;.x-pic-col-sortable;margin:3px 5px 0 2px;}
+	//span.pic-:hover{.x-pic-col-sortable-hover}
+
+	.body {
+		ul:nth-child(even){background:#f2f2f2;}
+		ul.hover{
+			background:#e5f5fd;border:1px solid #00a0e0;
+			li{height:34px;line-height: 34px;}
+		}
+	}
+	.col-_no {width:68px;}
+	.col-_check {
+		width:52px!important;
+		.checkbox{
+			width: 16px; height:16px;margin-top:9px;
+			.x-ixpic;.x-ixpic-cb-uncheck;
+		}
+		.selected{.x-ixpic-cb-checked;}
+	}
+	.hdr .col-_check .checkbox{margin-top:13px;}
+	.pic-noGpu{display: inline-block;width:68px;height: 12px !important;.x-pic;.x-pic-no-gpu;}
+	.flowSpeed{
+		display: inline-block;padding-right:10px;margin:5px 0;height: 25px;line-height: 25px;vertical-align: top; width:55%;
+		&.first{
+			border-right: 1px solid #ccc; width:45%;
+			span{margin-left:0;}
+		}
+		span{width:12px;height: 12px;margin:0 5px;.x-pic;}
+		.pic-up{.x-pic-flow-up;}
+		.pic-down{.x-pic-flow-down;}
+	}
+}
+.nodeJobGrid .body, .jobNodeGrid .body{
+	.cell{height:auto;}
+	&>ul{border-bottom: 1px solid #ccc;}
+	ul.row>li{height:auto;}
+	ul:nth-child(even){background:#fff;}
+	ul.row.hover{
+		background: #fff;border:0;border-bottom: 1px solid #ccc;
+		&>li{height:auto;}
+	}
+	ul ul{border-left:1px solid #ccc;border-right:1px solid #ccc;border-bottom:1px solid #ccc;}
+	ul.last{border-bottom: 0;}
+}
+.jobNodeGrid .body ul ul{border-right:0;}
+.nodeService .body{
+	ul.row:hover{background: #fff;border:0;}
+	ul:nth-child(even):hover{background:#f2f2f2;}
+	a{cursor:default;}
+}

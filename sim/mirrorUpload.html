@@ -1,0 +1,20 @@
+<html>
+<script>
+var qstr = location.search;
+qstr = qstr.indexOf("?")==0?qstr.substring(1) : "";
+qstr = qstr.indexOf("tkey=")>=0?qstr.split("tkey=")[1].split("&")[0]:"";
+
+var newMirror1 ={
+	"name" : 'mirror'
+};
+
+var newMirror = parent.Test.uploadMirror(newMirror1);
+parent.NV.mirrorDialog.FileUploadedCB(qstr,{
+	retCode : 1,
+	//err : "错误码".
+	data : {
+		"ids" : newMirror.ids
+	}
+});
+</script>
+</html>

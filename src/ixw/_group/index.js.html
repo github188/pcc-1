@@ -1,0 +1,282 @@
+<script>
+var caller = PCC.Global.groupCaller;
+var ixwPages = IXW.Pages;
+var globalActionConfig = IXW.Actions.configActions;
+var showDialog = NV.Dialog.show;
+var hideDialog = NV.Dialog.hide;
+var pccDialog = NV.Dialog;
+var PeriodicChecker = PCC.Util.PeriodicChecker;
+
+</script>
+
+<tpl id="page">
+	<div class="{clz}">
+		<a class="name" data-href="groups">群组用户</a>
+		<div class="node-space"></div>
+		<div class="group-name" data-id="{id}">{groupName}</div>
+	</div>
+	<div id="gridTools" class="grid-tools"></div>
+	<div id="gridContainer"></div>
+	<div id="pie">
+		<div id="quota" class="pcc-pie"></div>
+		<div id="using" class="pcc-pie"></div>
+	</div>
+</tpl>
+
+<tpl id="groups">
+	<div class="area">
+		<div>
+			<span class="label">{titleName}</span><input id="groupName" class="" value="{groupName}"><span class='mark'>*</span>
+		</div>
+		<div>
+			<span class="label">资源配额:</span><input id="quotaId" class="" value="{quota}"><span class='mark'>*</span>
+		</div>
+	</div>
+</tpl>
+
+<script>
+var grid = null;
+var checker = null;
+var quotaPie = null;
+var usingPie = null;
+
+var GridCfgBase = {
+	usePagination: false,
+	tools : {
+		buttons: ["add", "delete"],
+		type : "group",
+		search : true,
+		upload : false
+	}
+};
+var GridCfgs = {
+	current : {
+		clz : "groupGrid",
+		columns :[ "_checkbox", "_no", "groupName", "quota", "using", "taskNum"]
+	},
+	node : {
+		clz : "groupUserGrid",
+		columns : ["_checkbox", "_no", "userName", "quota", "using", "taskNum"]
+	}
+};
+
+function PccPie(cfg){
+	var el = $X($XP(cfg, "container", "body"));
+	var key = $XP(cfg, "key", "pie");
+	var title = $XP(cfg, "title", "数据饼图");
+	var groupChart = echarts.init(el);
+	var defaultOption = {
+	    tooltip: {
+	        trigger: 'item',
+	        formatter: "{b}: {c} ({d}%)"
+	    },
+	    color: ["#1ce4c1", "#4bcdf2", "#f6c570", "#f34e79", "#c96eb9"],
+	    title: {
+	    	text: title,
+	    	left: "center"
+	    },
+	    series: [{
+            name: key,
+            type:'pie',
+            radius: ['45%', '70%'],
+            itemStyle: {
+            	normal: {
+            		borderColor: "#fff",
+            		borderWidth: 2
+            	}
+            }
+	    }]
+	};
+	function _getOption(data){
+		var maxValue = $XP(data, "maxQuota", {});
+		var optionKey = key;
+		var arr = IX.map(data.items, function(item, idx){
+			var value = item[optionKey];
+			maxValue -= value;
+			return {value: value, name: item.name + ":" + value};
+		});
+		if (maxValue > 0) {
+			arr.unshift({
+				value: maxValue, 
+				name: "未使用:" + maxValue
+			});
+			if (!IX.Array.isFound("#d4d4d4", defaultOption.color))
+				defaultOption.color.unshift("#d4d4d4");
+		} else {
+			if (IX.Array.isFound("#d4d4d4", defaultOption.color))
+				defaultOption.color.shift();
+		}
+		defaultOption.series[0].data = arr;
+		return defaultOption;
+	}
+	return {
+		show: function(data){
+			groupChart.setOption(_getOption(data));
+		},
+		refresh: function(data){
+			var option = IX.inherit({animation: false}, _getOption(data));
+			groupChart.setOption(option);
+		}
+	};
+}
+
+function addOrEditGrid(isNode, rowModel, rowEl, isAdd){
+	var html = t_groups.renderData("", {
+		titleName : isNode ? "用户名称:" : "群组名称:",
+		groupName : rowModel ? rowModel.get("name") : "",
+		quota : rowModel ? rowModel.get("quota") : ""
+	});
+	var id = jQuery(".group-name").attr("data-id");
+	var cfg4Dialog = !isNode ? (isAdd ? {name: "新建群组", 
+			callerName: "addGroup", params: {}} : {name: "编辑群组", 
+			callerName: "editGroup", params: {id: rowModel.get("id")}}) : (isAdd ? {name: "新建用户", 
+			callerName: "addGroupUser", params: {id: id}} : {name: "编辑用户", 
+			callerName: "editGroupUser", params: {id: id, userId: rowModel.get("id")}});
+	showDialog({
+		title: cfg4Dialog.name,
+		content: html,
+		listen : {ok : function(){
+			var name = $X("groupName").value;
+			var quota = $X("quotaId").value;
+			if (IX.isEmpty(name && quota)) return;
+			caller(cfg4Dialog.callerName, IX.inherit({name: name, 
+				quota: quota}, cfg4Dialog.params), function(){
+				hideDialog();
+				grid.refresh();
+			});
+		}}
+	});
+}
+
+function renderBody(isNode, gridCfg, groupName, groupId){
+	$X('body').innerHTML = t_page.renderData("", {
+		clz : isNode ? "showNode" : "title-disabled",
+		id : groupId,
+		groupName :  groupName
+	});
+	PCC.GridTools.showTools("gridTools", gridCfg.tools, {});
+}
+
+function _checkFn(cbFn){
+	grid.refresh();
+	cbFn();
+}
+
+function showGroup(cbFn, rowId){
+	var isNode = (rowId !== undefined && rowId !== 0);
+	var gridCfg = IX.inherit(GridCfgBase, GridCfgs[isNode ? "node" : "current"]);
+	if (isNode) {
+		if (grid) {
+			renderBody(isNode, gridCfg, grid.getModel().getRow(rowId).get("name"), rowId);
+		} else {
+			caller("getGroupName", {id: rowId}, function(data){
+				renderBody(isNode, gridCfg, data, rowId);
+			});
+		}
+	} else {
+		renderBody(isNode, gridCfg, "", "");
+	}
+	function deletedNodes(name, params, cbFn){
+		caller(name, params, function(){
+			grid.refresh();
+			cbFn();
+		});
+	}
+
+	grid = new PCC.Grid.NVGrid(IX.inherit(gridCfg, {
+		container : "gridContainer",
+		actions : [["edit", "编辑", function(rowModel, rowEl){
+			addOrEditGrid(isNode, rowModel, rowEl, false);
+		}], ["delete", "删除", function(rowModel){
+			pccDialog.confirm("删除", "确认删除" + rowModel.get("name")+"吗？", function(cbFn){
+				var name = isNode ? "deleteGroupUsers" : "deleteGroups";
+				var params = isNode ? {id: rowId, ids: [rowModel.getId()]} : {ids : [rowModel.getId()]};
+				deletedNodes(name, params, cbFn);
+			});
+		}]],
+		dataLoader : function(params, cbFn){
+			var name = isNode ? "getGroupUsers" : "getGroups";
+			var param = isNode ? {id: rowId} : {};
+			caller(name, IX.inherit(params, param), function(data){
+				cbFn(data);
+				$X("gridContainer").style.height = "250px";
+				if (!quotaPie) {
+					quotaPie = new PccPie({
+						container: "quota",
+						key: "quota",
+						title: "资源分配情况"
+					});
+					quotaPie.show(data);
+				} else {
+					quotaPie.refresh(data);
+				}
+				
+				if (!usingPie) {
+					usingPie = new PccPie({
+						container: "using",
+						key: "using",
+						title: "资源使用情况"
+					});
+					usingPie.show(data);
+				} else {
+					usingPie.refresh(data);
+				}
+			});
+		},
+		clickOnRow : function(rowId, cellName, cellEl){
+			if ($XH.hasClass(document.body, "group-user"))
+				return;
+			ixwPages.load(ixwPages.createPath("group-user", {id : rowId}));
+		},
+		onselect : function(){
+			var ids = [];
+			IX.map(grid.getSelectedRows(), function(rowModel){
+				if(rowModel) ids.push(rowModel.getId());
+			});
+			PCC.GridTools.enableTools("gridTools",ids.length>0);
+		}
+	}));
+	PCC.Grid.currentGrid = {
+		"delete" : function(){
+			var ids = [];
+			IX.map(grid.getSelectedRows(), function(rowModel){
+				if (rowModel)
+					ids.push(rowModel.getId());
+			});
+			pccDialog.confirm("删除", "确认删除这"+ids.length+"个吗？", function(cbFn){
+				var name = isNode ? "deleteGroupUsers" : "deleteGroups";
+				var params = isNode ? {id: rowId, ids: ids} : {ids : ids};
+				deletedNodes(name, params, cbFn);
+			});
+		},
+		add : function(){
+			addOrEditGrid(isNode, "", "", true);
+		}
+	};
+	PCC.Env.onResize4Body();
+	grid.show(/*function(){
+		updateGridInterval = setInterval(grid.refresh, 5000);
+	}*/);
+	checker = new PeriodicChecker(_checkFn);
+	checker.start();
+	cbFn();
+}
+function switchOut(currentContext, nextContext){
+	quotaPie = null;
+	usingPie = null;
+	if (checker) checker.stop();
+}
+
+IX.ns("PCC.Group");	
+PCC.Group.init = function(pageCfg, pageParams, cbFn){
+	pageCfg.switchOut = switchOut;
+	switch (pageCfg.name) {
+		case "groups":
+			showGroup(cbFn);
+			break;
+		case "group-user":
+			showGroup(cbFn, pageParams.id);
+			break;
+	}
+};
+</script>

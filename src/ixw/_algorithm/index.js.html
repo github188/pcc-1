@@ -1,0 +1,291 @@
+<script>
+var caller = PCC.Global.algorithmCaller;
+var ixwPages = IXW.Pages;
+var globalActionConfig = IXW.Actions.configActions;
+var showDialog = NV.Dialog.show;
+var hideDialog = NV.Dialog.hide;
+var pccDialog = NV.Dialog;
+var uploadedCbHT = new IX.IListManager();
+</script>
+<tpl id="page">
+	<div class="{clz}">
+		<a class="name" data-href="algorithms">算法模块</a>
+		<div class="node-space"></div>
+		<div class="algorithm-name" data-id="{id}">{algorithmName}</div>
+	</div>
+	<div id="gridTools" class="grid-tools"></div>
+	<div id="gridContainer"></div>
+</tpl>
+
+<tpl id="nodePage">
+	<div class="{clz}">
+		<a class="name" data-href="algorithms">算法模块</a>
+		<div class="node-space"></div>
+		<a class="algorithm-name" data-id="{id}" data-href="algorithm/{id}">{algorithmName}</a>
+		<div class="node-space"></div>
+		<div class="algorithm-nodeName" data-id="{nodeId}">{algorithmNodeName}</div>
+	</div>
+	<div id="container">{algorithmDetails}</div>
+</tpl>
+
+<tpl id="algorithms">
+	<div class="area">
+		<div>
+			<span class="label">算法组名称:</span><input id="algorithmName" class="" value="{algorithmName}"><span class='mark'>*</span>
+		</div>
+	</div>
+</tpl>
+
+<tpl id="algorithm">
+<form action="{url}" method="POST" enctype="multipart/form-data" id="algorithmNode_form" name="algorithmNode_form" target="algorithmNode_frame">
+	<div class="area">
+		<div>
+			<span class="label">算法模块名称:</span><input id="algorithmName" name="name" value="{algorithmName}"><span class='mark'>*</span>
+		</div>
+		<div>
+			<input type="hidden" id="{id}" name="id" value="{id}">
+			<input type="hidden" nodeId="{nodeId}" name="nodeId" value="{nodeId}">
+			<span class="label">添加算法模块:</span>
+			<span class="relative_file">
+				<a class="updata_file">选择文件</a>
+				<input type="file" id="algorithm_file" class="required" name="algorithm_file">
+				<input type="hidden" name="tkey" value ="{tkey}" id="tkey"/>
+			</span><span class='mark'>*</span>
+			<div class="txt {clz}"><span id="fileName">{fileName}</span><a class="close" data-href="$clean.file"></a></div>
+		</div>
+	</div>
+	<iframe name="algorithmNode_frame" id="algorithmNode_frame" style="display:none" src="about:blank"></iframe>
+</form>
+</tpl>
+<script>
+var grid = null;
+
+var GridCfgs = {
+	current : {
+		clz : "algorithmGrid",
+		columns :[ "_checkbox","_no","algorithmsName","algorithmNum"],
+		tools : {
+			buttons: ["refresh", "add", "delete"],
+			type : "algorithm",
+			search : true,
+			upload : false
+		}
+	},
+	node : {
+		clz : "algorithmNodeGrid",
+		columns : ["_checkbox","_no","algorithmName","version"],
+		tools : {
+			buttons: ["refresh", "add", "delete"],
+			type : "algorithm",
+			search : true,
+			upload : false
+		}
+	}
+};
+
+globalActionConfig([["clean.file", function(params, el){
+	jQuery("#algorithm_file").val("");
+	jQuery(".txt").addClass("title-disabled");
+}]]);
+
+function refreshGrid(grid,pageNo){
+	var body = document.documentElement;
+	var screenY = body.clientHeight - $X('gridContainer').offsetTop;
+	var screenX = body.clientWidth - 280;
+	jQuery(".ixw-grid").addClass("opcity");
+	$X('refreshLoading').style.top = screenY/2-24 + "px";
+	$X('refreshLoading').style.left = screenX/2 -24  + "px";
+	$XH.removeClass($X('refreshLoading'), "hide");
+	grid.refresh(pageNo);
+}
+
+function _algorithmOkFn(isAdd, id){
+	var name = $X("algorithmName").value;
+	if (IX.isEmpty(name)) return;
+	caller(isAdd ? "addAlgorithm" : "editAlgorithm", IX.inherit({name: name}, isAdd ? {} : {id: id}), function(){
+		hideDialog();
+		refreshGrid(grid);
+	});
+}
+
+function submitAlgorithmFile(tkeyName, cbFn){
+	var formEl = $X('algorithmNode_form');
+	uploadedCbHT.register(tkeyName, function(retData){
+		switch(retData.retCode){
+		case 0 :
+			alert(retData.err);
+			break;
+		case -1 :
+			PCC.Env.clearSession();
+			break;
+		default:
+			return cbFn(retData.data);
+		}
+	});
+	formEl.submit();
+}
+
+function _algorithmNodeOkFn(isAdd, keyName){
+	var name = $X("algorithmName").value;
+	if (IX.isEmpty(name)) return;
+	submitAlgorithmFile(keyName, function(ret){
+		hideDialog();
+		refreshGrid(grid);
+	});
+}
+
+function renderBody(isNode, gridCfg, algorithmName, algorithmId){
+	$X('body').innerHTML = t_page.renderData("", {
+		clz : isNode ? "showNode" : "title-disabled",
+		id : algorithmId,
+		algorithmName :  algorithmName
+	});
+	PCC.GridTools.showTools("gridTools", gridCfg.tools, {});
+}
+
+function fileChange(){
+	var fileEl = $X('algorithm_file');
+	if (!fileEl) return;
+	jQuery(fileEl).bind("change", function(e){
+		jQuery(".txt").removeClass("title-disabled");
+		jQuery("#fileName").html(fileEl.value.split('\\').pop());
+	});
+}
+
+function addOrEditGrid(isNode, rowModel, rowEl, isAdd){
+	var tkeyName = IX.id();
+	var html = isNode ? t_algorithm.renderData("", {
+		id: jQuery(".algorithm-name").attr("data-id"),
+		nodeId: rowModel ? rowModel.getId() : "",
+		tkey: tkeyName,
+		fileName: rowModel ? rowModel.get("fileName") : "",
+		url: PCC.Global.algorithmNodeFileUploadUrl+"?tkey=" + tkeyName,
+		clz: isAdd ? "title-disabled" : "",
+		algorithmName: rowModel ? rowModel.get("name") : ""
+	}) : t_algorithms.renderData("", {
+		algorithmName: rowModel ? rowModel.get("name") : ""
+	});
+	showDialog({
+		title: isNode ? (isAdd ? "新建算法" : "编辑算法") : (isAdd ? "新建算法组" : "编辑算法组"),
+		content: html,
+		listen : {ok : function(){
+			if (isNode) 
+				_algorithmNodeOkFn(isAdd, tkeyName);
+			else
+				_algorithmOkFn(isAdd, (rowModel ? rowModel.getId() : ""));
+		}}
+	});
+	fileChange();
+}
+
+function showAlgorithm(cbFn, rowId){
+	var isNode = (rowId !== undefined && rowId !== 0);
+	var gridCfg = GridCfgs[isNode ? "node" : "current"];
+	if (isNode) {
+		if (grid) {
+			renderBody(isNode, gridCfg, grid.getModel().getRow(rowId).get("name"), rowId);
+		} else {
+			renderBody(isNode, gridCfg, rowId, rowId);
+		}
+	} else {
+		renderBody(isNode, gridCfg, "", "");
+	}
+	function deletedNodes(name, params, cbFn){
+		caller(name, params, function(){
+			grid.refresh();
+			cbFn();
+		});
+	}
+
+	grid = new PCC.Grid.NVGrid(IX.inherit(gridCfg, {
+		container : "gridContainer",
+		actions : [["edit", "编辑", function(rowModel, rowEl){
+			addOrEditGrid(isNode, rowModel, rowEl, false);
+		}], ["delete", "删除", function(rowModel){
+			pccDialog.confirm("删除", "确认删除" + rowModel.get("name")+"吗？", function(cbFn){
+				var name = isNode ? "deleteAlgorithmNodes" : "deleteAlgorithms";
+				var params = isNode ? {id: rowId, ids: [rowModel.getId()]} : {ids : [rowModel.getId()]};
+				deletedNodes(name, params, cbFn);
+			});
+		}]],
+		dataLoader : function(params, cbFn){
+			var name = isNode ? "getAlgorithmNodes" : "getAlgorithms";
+			var param = isNode ? {id: rowId} : {};
+			caller(name, IX.inherit(params, param), cbFn, function(){
+				// switchOut();
+			});
+		},
+		clickOnRow : function(rowId, cellName, cellEl){
+			if ($XH.hasClass(document.body, "algorithm-node"))
+				return ixwPages.load(ixwPages.createPath("algorithm-node-details", {id: jQuery(".algorithm-name").attr("data-id"), nodeId : rowId}));
+			ixwPages.load(ixwPages.createPath("algorithm-node", {id : rowId}));
+		},
+		onselect : function(){
+			var ids = [];
+			IX.map(grid.getSelectedRows(), function(rowModel){
+				if(rowModel) ids.push(rowModel.getId());
+			});
+			PCC.GridTools.enableTools("gridTools",ids.length>0);
+		}
+	}));
+	PCC.Grid.currentGrid = {
+		refresh :function(){
+			refreshGrid(grid);
+		},
+		"delete" : function(){
+			var ids = [];
+			IX.map(grid.getSelectedRows(), function(rowModel){
+				if (rowModel)
+					ids.push(rowModel.getId());
+			});
+			pccDialog.confirm("删除", "确认删除这"+ids.length+"个吗？", function(cbFn){
+				var name = isNode ? "deleteAlgorithmNodes" : "deleteAlgorithms";
+				var params = isNode ? {id: rowId, ids: ids} : {ids : ids};
+				deletedNodes(name, params, cbFn);
+			});
+		},
+		add : function(){
+			addOrEditGrid(isNode, "", "", true);
+		}
+	};
+	PCC.Env.onResize4Body();
+	grid.show(/*function(){
+		updateGridInterval = setInterval(grid.refresh, 5000);
+	}*/);
+	cbFn();
+}
+
+function showDetails(cbFn, id, nodeId){
+	grid = null;
+	caller("getAlgorithmDetails", {id: id, nodeId: nodeId}, function(data){
+		$X('body').innerHTML = t_nodePage.renderData("", {
+			clz : "showNode",
+			id : nodeId,
+			nodeId : id,
+			algorithmName : data.algorithmNodeName,
+			algorithmNodeName : data.algorithmName,
+			algorithmDetails : data.algorithmDetails
+		});
+	});
+}
+
+IX.ns("PCC.Algorithm");
+PCC.Algorithm.FileUploadedCB = function(tkey, retData){
+	var fn = uploadedCbHT.get(tkey); 
+	fn(retData);
+};
+
+PCC.Algorithm.init = function(pageCfg, pageParams, cbFn){
+	switch (pageCfg.name) {
+		case "algorithms":
+			showAlgorithm(cbFn);
+			break;
+		case "algorithm-node":
+			showAlgorithm(cbFn, pageParams.id);
+			break;	
+		case "algorithm-node-details":
+			showDetails(cbFn, pageParams.nodeId, pageParams.id);
+			break;
+	}
+};
+</script>

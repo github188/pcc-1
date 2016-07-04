@@ -1,0 +1,608 @@
+<script>
+var globalActionConfig = IXW.Actions.configActions;
+var RowModelBase = IXW.Lib.GridModel.RowModelBase;
+var ixwPages = IXW.Pages;
+var ixwOptions = IXW.Lib.Options;
+var uilib = PCC.UILib;
+</script>
+<tpl id="pagin">
+	<div id="{id}-indics" class="l"><tpl id="indics">
+		从<span>{stx}</span>到<span>{endx}</span>/共<span>{pagex}</span>条数据
+	</tpl></div>
+	<div class="r">显示 <div class="page">
+		<div class="dropdown">
+			<a class="changePage dropdown-toggle" data-toggle="dropdown">
+				<span id="curPage" class="pagesizeList">{pageInfo}</span>
+				<span class="pgFrame"><span class="pic-pg"></span></span>
+			</a>
+			<ul class="dropdown-menu"><tpl id="dropdownPg">
+				<li id = "{id}"><a class="pagesizeList" data-href="$nvgrid.changePageSize" data-key="{nvgridId}" id = "{id}">{html}</a></li></tpl>
+			</ul>
+		</div></div></div>
+	<div class="m">{paginHTML}</div>
+</tpl>
+<script>
+var PagesizeList = [
+{id : "page-0",value : 20, text : "每页20条"},
+{id : "page-1",value : 50, text : "每页50条"},
+{id : "page-2",value : 100, text : "每页100条"},
+{id : "page-3",value : 200, text : "每页200条"}
+];
+var currentPageSize = PagesizeList[0];
+var pageSizeChangeListeners = {};
+globalActionConfig([["nvgrid.changePageSize",function(params,el){
+	var liEl = el.parentNode;
+	// if ($XH.hasClass(liEl, "disabled"))
+	// 	return;
+	var _el = $XH.ancestor(liEl, "dropdown");
+	var curpsEl = $XH.first($XD.first(_el, "a"), "pagesizeList");
+	curpsEl.innerHTML = el.text;
+
+	var index = el.id.split("-").pop();
+	$XH.removeClass($X(currentPageSize.id),"hide");
+	currentPageSize = PagesizeList[index];
+	$XH.addClass($X(currentPageSize.id),"hide");
+	var fn = pageSizeChangeListeners[params.key];
+	if (IX.isFn(fn))
+		fn(PagesizeList[index].value);
+}], ["status.chose", function(params, el){
+	var key = params.key;
+	var type = $XD.dataAttr(el, "type", "");
+	var dropdownEl = $XH.ancestor(el, "dropdown");
+	if(!dropdownEl) return;
+	var value = el.innerHTML === "空" ? "" :el.innerHTML;
+	var valueEl = $XH.first($XH.first(dropdownEl, "dropdown-toggle"), "value");
+	var inputEl = $XD.first(dropdownEl, "input");
+	inputEl.value = value;
+	valueEl.innerHTML = value;
+	tryExecuteTool("filter", [{type : type, key : key}]);
+}]]);
+function getDropdownPg(id){
+	return IX.map(PagesizeList,function(item){
+		return {
+			nvgridId : id,
+			id : item.id,
+			html : item.text
+		};
+	});
+}
+
+function NVPagination(id){
+	var inst = new IXW.Lib.Pagination({
+		id : id + "-pagin",
+		total : 0,
+		current : 0
+	});
+	var tpldata = {
+		id : id,
+		indics: [{stx : 0,endx : 0, pagex : 0}],
+		paginHTML : inst.getHTML(),
+		pageInfo : currentPageSize.text,
+		dropdownPg : getDropdownPg(id)
+	};
+	var curPageNo = 0;
+	return {
+		getHTML : function(){return t_pagin.renderData("", tpldata);},
+		bind : function(pageNoChangedFn, pageSizeChangeFn){
+			inst.bind(pageNoChangedFn);
+			pageSizeChangeListeners[id] = function(pageSize){
+				pageSizeChangeFn(curPageNo, pageSize);
+			};
+		},
+		jump : inst.jump,
+		refresh : function(totalPages, currentPageNo, itemNum, totalNum, onlyData){
+			inst.apply(currentPageNo, totalPages, onlyData);
+			tpldata.paginHTML = inst.getHTML();
+			curPageNo = currentPageNo;
+			var stx = currentPageNo * currentPageSize.value;
+			tpldata.indics = [{stx : itemNum >0 ?stx+1 :stx, endx : stx + itemNum, pagex : totalNum}];
+			var el = $X(id + "-indics");
+			if (!onlyData && el) el.innerHTML = t_pagin.renderData("indics", tpldata.indics[0]);
+		},
+		getCurPageNo : function(){return curPageNo +1;}
+	};
+}
+</script>
+<tpl id="grid">
+<div id="{id}" class="nv-grid {gridClz}">
+	<div id="{id}-body" class="grid-body">{gridHTML}</div>
+	<div id="{id}-foot" class="footbar">{paginHTML}</div>
+</div>
+</tpl>
+<tpl id="pageVhost">
+	<div id="gridContainer" class="nobuttonPage"><img id="refreshLoading" class="loading" src="{imgUrl}"></div>
+</tpl>
+<script>
+
+/** cfg : {
+	container : //required
+	id, // optional
+
+	clz : gridClz,
+	usePagination : false; default true;
+	
+	rowModel : function(rowData, colModels), //optional
+	// pageSize : 25, default 20
+	columns : [name],
+	actions : [[name, function(rowModel, rowEl)]]
+	dataLoader : function(params, cbFn)
+	onselect : function(),
+	clickOnRow : function(rowId)
+}
+ */
+function GridBase(cfg){
+	var container = $XP(cfg,  "container");
+	var id = cfg.id || IX.id();
+
+	var tools = $XP(cfg, "tools", []);
+	var usePagination = $XP(cfg, "usePagination", true);
+	var dataLoader = $XF(cfg, "dataLoader");
+	var clickOnRow = $XF(cfg, "clickOnRow");
+	var onselect = $XF(cfg, "onselect");
+	var sortParams = [];
+	var searchKey = "";
+	var itemPageName = $XP(cfg, "itemPageName", "");
+	var selectedItems = [];//保存选中的id，翻页后，再翻回来，也能保持选中。
+	var curPageNo =0;
+
+	var grid = new IXW.Lib.Grid(IX.inherit(cfg, {
+		id : id + "-grid",
+		pageSize : currentPageSize.value,
+		rowModel : RowModelBase,
+		//selectedIds : selectedIds,
+		dataLoader : function(params, cbFn){
+			dataLoader(IX.inherit(params, {
+				sortInfo : sortParams,//JSON.stringify(sortParams),
+				key : searchKey
+			}), cbFn);
+		}
+	}));
+	var model = grid.getModel();
+
+	function applyHover(){
+		jQuery($X(container)).find(".row").hover(function(){
+			$XH.addClass(this, "hover");
+			$XH.removeClass($XH.first(this,"col-actions"),"invisible");
+		}, function(){
+			$XH.removeClass(this, "hover");
+			$XH.addClass($XH.first(this,"col-actions"),"invisible");
+		});
+		$XH.addClass($X(currentPageSize.id),"hide");
+		jQuery($X(container)).find(".cpuInfo").hover(function(){
+			//var cpuInfoPanel = initCPUPanel();
+			//cpuInfoPanel.trigger(el);
+			$XH.removeClass($XH.first(this, "cputip"), "hide");
+		},function(){
+			$XH.addClass($XH.first(this, "cputip"), "hide");
+		});
+	}
+	var pagin =	null;
+	function afterLoaded(pageNo, items, onlyData){
+		var total = model.getDataModel().getTotal();
+		grid.refresh(onlyData, applyHover);
+		if(pagin)
+			pagin.refresh(model.getPageCount(), pageNo, items.length,total, onlyData);
+
+	}
+	function loadPage(pageNo, clickBtnRefreshFn){
+		/*跨页选择*/
+		/*if(pagin) curPageNo = pagin.getCurPageNo();
+		if(curPageNo){
+			var ids = IX.map(getSelectedRows(), function(rowModel){
+				return rowModel.getId();
+			});
+			var pages = [];
+			if(selectedItems.length > 0){
+				for(var i =0; i< selectedItems.length; i++){
+					pages = pages.concat(selectedItems[i].page);
+					if(selectedItems[i].page *1 === curPageNo){
+						selectedItems[i].value = ids;
+					}
+				}
+				var strpages = pages.join(",") + ",";
+				if(strpages.indexOf(curPageNo + ",") <0) selectedItems.push({page : curPageNo, value : ids});
+			}else{
+				selectedItems.push({page : curPageNo, value : ids});
+			}
+			model.setSelectedItems(selectedItems);
+		}*/
+		model.load(pageNo, function(items){
+			afterLoaded(pageNo, items);
+			if(! ($X('refreshLoading'))) return;
+			jQuery(".ixw-grid").removeClass("opcity");
+			$XH.addClass($X('refreshLoading'), "hide");
+			if(IX.isFn(clickBtnRefreshFn)) clickBtnRefreshFn();
+			onselect();
+			if(jQuery("#itemList").find(".checkbox").length){
+				var isChoseAll = true;
+				var choseAllEl = jQuery("#gridContainer").find(".hdr .checkbox")[0];
+				jQuery("#itemList").find(".checkbox").each(function(){
+					if (!$XH.hasClass(this, "selected")) isChoseAll = false;
+				});
+				$XH[isChoseAll ? "addClass" : "removeClass"](choseAllEl, "selected");
+			}
+			PCC.Env.onResize4Body();
+		});
+	}
+	function getSelectedRows(){
+		var selectedCells = jQuery("#" + id + "-grid").find(".row .selected");
+		return IX.map(selectedCells, function(el){
+			var _el = $XH.ancestor(el, "row");
+			return model.getRow(_el.id);
+		});
+	}
+	grid.colAction = function(name, colEl){
+		if (name == "_check"){
+			var $el = jQuery(colEl);
+			var ifSelectAll = !$el.find(".checkbox").hasClass("selected");
+			var $checkboxs = jQuery(colEl).parents(".ixw-grid").find(".col-_check .checkbox");
+			$checkboxs[ifSelectAll?"addClass":"removeClass"]("selected");
+			onselect();
+		} else { //sort
+			var ifDown = !$XH.first(colEl, "up");
+			if(ifDown)
+				$XH.addClass($XH.first(colEl, "pic-") , "up");
+			else
+				$XH.removeClass($XH.first(colEl, "pic-") , "up");
+			if(name.indexOf('allocated') > -1)
+				name = 'sort_'+name.substring(9);
+			sortParams = IX.Array.remove(sortParams, name, function(elem,item){
+				return item.name == name;
+			});
+			/*if(ifDown)
+				sortParams = name;
+			else
+				sortParams = "";*/
+			sortParams.push({name : name, ifDown : ifDown});
+			loadPage(0);
+		}
+	};
+	grid.cellAction = function(rowId, cellName, cellEl){
+		if (cellName == "_check"){
+			$XH.toggleClass($XH.first(cellEl, "checkbox"), "selected");
+			var isChoseAll = true;
+			jQuery("#itemList").find(".checkbox").each(function(){
+				if (!$XH.hasClass(this, "selected")) isChoseAll = false;
+			});
+			var choseAllEl = jQuery("#gridContainer").find(".hdr .checkbox")[0];
+			$XH[isChoseAll ? "addClass" : "removeClass"](choseAllEl, "selected");
+			onselect();
+		} else {
+			clickOnRow(rowId, cellName, cellEl);
+		}
+	};
+
+	if (usePagination){
+		pagin = new NVPagination(id);
+		pagin.bind(loadPage, function(pageNo, pageSize){
+			model.resetPage(0, pageSize, function(items){
+				afterLoaded(0, items);
+				PCC.Env.onResize4Body();
+			});
+		});
+	}
+	function _show(items, refreshIntetvalFn){
+		var el = $X(container);
+		if (!el)
+			return;
+		if(!$XH.hasClass(document.body, itemPageName) && itemPageName!=="") return;
+		afterLoaded(0, items, true);
+		el.innerHTML = t_grid.renderData("", {
+			id : id,
+			gridClz : $XP(cfg, "clz", ""),
+			gridHTML : grid.getHTML(),
+			paginHTML : pagin?pagin.getHTML() : ""
+		});
+		PCC.Env.onResize4Body();
+		applyHover();
+		if(IX.isFn(refreshIntetvalFn)) refreshIntetvalFn();
+	}
+
+	return {
+		getModel : function(){return model;},
+		getSelectedRows : getSelectedRows,
+		setSelectedIdsNull : function(){
+			jQuery("#" + id + "-grid").find(".selected").removeClass("selected");
+			selectedItems = [];
+			model.setSelectedItems([]);
+		},
+		show: function(refreshFn){model.load(0, _show, refreshFn);},
+		search : function(key){
+			if (key == searchKey)
+				return;
+			searchKey = key;
+			loadPage(0, function(){
+				jQuery('#gridContainer .col-_check .checkbox').removeClass("selected");
+				jQuery('#gridTools .chkEnable').addClass("disable");
+				selectedItems = [];
+				model.setSelectedItems([]);
+			});
+		},
+		refresh : function(pageNo, clickBtnRefreshFn){
+			if (pagin) pagin.jump(pageNo, clickBtnRefreshFn);
+			else loadPage(0, clickBtnRefreshFn, pageNo);
+		},
+		getCurPageNo : function(){return pagin.getCurPageNo();}
+	};
+}
+
+IX.ns("PCC.Grid");
+PCC.Grid.NVGrid = GridBase;
+
+PCC.Grid.CommonGrid = function(container, cfg){
+	$X(container).innerHTML = t_pageVhost.renderData("", {imgUrl : PCC.Global.refreshIntervalUrl});
+	PCC.Env.onResize4Body();
+	return new GridBase(IX.inherit({container : container},cfg.grid));
+};
+PCC.Grid.currentGrid = null;
+</script>
+<tpl id="MutiTools">
+	<div>
+		<div class="l dtzone {dtzoonClz}">时间筛选：{dtHTML}</div>
+		<a class="btn-filter {dtzoonClz}" data-href="$nvgrid.clickTool" data-key="dtp-filter" data-from="{from}" data-to="{to}"></a>
+		<div class="dttext {dtzoonClz} hidden">
+			<span class="from"></span>-<span class="to"></span><a data-href="$nvgrid.clearDpt" class="pic-"></a>
+		</div>
+		<div class="r search {searchClz}">
+			<input type="text" placeHolder="请输入检索内容">
+			<a class="r pic-search" data-href="$nvgrid.search"></a>
+		</div>
+	</div>
+	<div>
+		<tpl id="btns">
+			<a class="btn-{name} {clz}" data-href="$nvgrid.clickTool" data-key="{name}" {dtfromto}>{text}</a>
+		</tpl>
+		<tpl id="filter"><div class="r {clz}"><span class="text">{filterName}：</span>{filterHTML}</div></tpl>
+	</div>
+</tpl>
+<tpl id="tools">
+	<div class="l dtzone {dtzoonClz}">时间筛选：{dtHTML}</div>
+	<tpl id="btns">
+		<a class="btn-{name} {clz}" id="{id}" data-href="$nvgrid.clickTool" data-key="{name}" {dtfromto}>{text}</a>
+	</tpl>
+	<div class="dttext {dtzoonClz} hidden"><span class="from"></span>-<span class="to"></span><a data-href="$nvgrid.clearDpt" class="pic-"></a></div>
+	<div class="r search {searchClz}">
+		<input type="text" placeHolder="请输入检索内容">
+		<a class="r pic-search" data-href="$nvgrid.search"></a>
+	</div>
+	<tpl id="filter"><div class="r {clz}"><span class="text">{filterName}：</span>{filterHTML}</div></tpl>
+</tpl>
+<script>
+var dropdownBox = PCC.inputBox.dropdownBox();
+var statusInfo = {
+	node : [{id:-1, name : "全部"},{id:1, name : "正常"},{id:0, name : "故障"}],
+	channel : [{id:-1, name : "全部"},{id:1, name : "正常"},{id:0, name : "异常"}],
+	disk : [{id:-1, name : "全部"},{id:1, name : "正常"},{id:0, name : "故障"}],
+	log : [{id: -1, name: "全部"}, {id: 1, name: "已处理"}, {id: 0, name: "未处理"}]
+};
+var AllBtns = {
+	"refresh" : false,
+	"delete" : true,
+	"edit" : true,
+	"compare" : true,
+	"add" : false,
+	"lock" : false,
+	"unlock" : true,
+	"filter" : true,
+	"import" : false,
+	"stop": true,
+	"submit":true,
+	"handle": true
+};
+var AllFilters = {
+	"status" : "状态",
+	"algorithm" : "算法模块",
+	"group" : "群组名称"
+};
+var btnsTexts = {
+	"import" : "导入",
+	"stop" : "停止",
+	"submit" : "提交作业"
+};
+function getLogDpts(filterData){
+	var html = "", seprate = "";
+	var datePickTriggers = IX.map([
+		{type : "from", label : ""},
+		{type : "to", label : ""}
+	], function(cfg){
+		var type = cfg.type;
+		var value = $XP(filterData, type, "");
+		var dpt = new IXW.Lib.DatePickTrigger(IX.inherit(cfg, {
+			id: "dtp-"+type,
+			value : value ? parseInt(value / 1000) : "",
+			dataAttrs : [["key", type]],
+			onchange : function(newValue, inputEl){
+				var key = inputEl.id.split("-")[1];
+				jQuery('.btn-filter[data-key="dtp-filter"]').attr("data-"+key, newValue * 1000);
+			}
+		}));
+		seprate = type === "from"? "-" : "";
+		html += dpt.getHTML() + seprate;
+		return dpt;
+	});
+	return html;
+}
+function getFilters(name, moduleType, filterData){
+	if(name === "status")
+		return dropdownBox.getDropdownBoxHTML(name, {inputId : "status", value : "全部"}, statusInfo[moduleType], "status.chose");
+	else
+		return dropdownBox.getDropdownBoxHTML(name,{inputId : name, value : "全部"}, $XP(filterData, name, []), "status.chose");
+
+}
+function getTriggersHTML(filterData){
+	var datePickTriggersHTML = "";
+	//if(moduleType === "logs")
+		datePickTriggersHTML += getLogDpts(filterData);
+	return datePickTriggersHTML;
+}
+function showGridTools(container, cfg, filterData, second){
+	var el = $X(container);
+	var clz = "";
+	if (!el)
+		return;
+	var type = $XP(cfg, "type", "");
+	var btns = IX.map($XP(cfg, "buttons", []), function(name){
+		return {
+			name : name,
+			clz : AllBtns[name]?"chkEnable disable":"",
+			id : name === "import" ? "uploadFile" : "",
+			dtfromto : name === "filter" ? "data-from = '' data-to=''":"",
+			text : btnsTexts[name] || ""
+		};
+	});
+	var filters = IX.map($XP(cfg, "filter", []), function(item){
+		return {
+			clz : item,
+			filterName : AllFilters[item],
+			filterHTML : getFilters(item, type, filterData)
+		};
+	});
+	var ifEnableSearch = $XP(cfg, "search");
+	var ifEnableDt = $XP(cfg, "dpt");
+	var ifEnableStatus = $XP(cfg, "status");
+	
+	if(second === "history"){
+		el.innerHTML = t_MutiTools.renderData("", {
+			btns : btns,
+			clz : AllBtns.more ? "chkEnable disable":"",
+			searchClz : ifEnableSearch?"":"hidden",
+
+			dtzoonClz : ifEnableDt?"":"hidden",
+			dtHTML : getTriggersHTML(filterData),
+			filter : filters,
+			from : $XP(filterData, "from", 0),
+			to : $XP(filterData, "to", 0)
+			//statusClz : ifEnableStatus ? "" : "hidden",
+			//statusFilterHTML : getStatusFilter(type)
+		});
+	}else{
+		el.innerHTML = t_tools.renderData("", {
+			btns : btns,
+			clz : AllBtns.more ? "chkEnable disable":"",
+			searchClz : ifEnableSearch?"":"hidden",
+
+			dtzoonClz : ifEnableDt?"":"hidden",
+			dtHTML : "",
+			filter : filters
+			//statusClz : ifEnableStatus ? "" : "hidden",
+			//statusFilterHTML : getStatusFilter(type)
+		});
+	}
+	
+	if (ifEnableSearch){
+		var inputEl = jQuery(el).find(".search input");
+		inputEl.bind("keydown", function(e){
+			if (e.which == 13 && !IX.isEmpty(this.value)){
+				inputEl.blur();
+				tryExecuteTool("search", [this.value]);
+			}
+		});
+		inputEl.bind("blur", function(){
+			tryExecuteTool("search", [this.value]);
+			jQuery(el).find(".search").removeClass("click");
+		});
+		inputEl.bind("focus", function(){
+			jQuery(el).find(".search").addClass("click");
+		});
+	}
+	if($XP(cfg, "upload", false)){
+		new uilib.FileUploadBtn("uploadFile", function(){
+			//jQuery('#gridMask').width(0);
+			//jQuery('#gridMask').height(0);
+			//_refresh();
+		}, null, function(){
+			//jQuery('#gridMask').width(jQuery("#Grid").width()) ;
+			//jQuery('#gridMask').height(jQuery("#Grid").height()) ;
+		});
+	}
+}
+function tryExecuteTool(fname, args){
+	var currentGrid = PCC.Grid.currentGrid;
+	if (!currentGrid || !(fname in currentGrid))
+		return;
+	var fn = currentGrid[fname];
+	if (IX.isFn(fn))
+		fn.apply(null, args);
+}
+
+globalActionConfig([["nvgrid.clickTool", function(params, el){
+	if ($XH.hasClass(el,"disable")) return;
+	if (params.key == "dtp-filter"){
+		var fromValue = $XD.attr(el, "data-from");
+		var toValue = $XD.attr(el, "data-to");
+		if (fromValue > toValue)
+			return alert("起始时间应小于结束时间");
+		return tryExecuteTool(params.key, [{type: "from", key: fromValue}, {type: "to", key: toValue}]);
+	}
+	tryExecuteTool(params.key, [el]);
+}],["nvgrid.search", function(params, el){
+	var inputEl = $XD.first(el.parentNode, "input");
+	tryExecuteTool("search", [inputEl.value]);
+}],["nvgrid.clearDpt", function(params, el){
+	$XH.addClass($XH.ancestor(el, "dttext"),"hidden");
+	IX.map(jQuery("#gridTools .ixw-dpt input"), function(item){
+		item.value = "";
+	});
+	var aFilterEl = $XH.first($XH.ancestor(el, "grid-tools"), "btn-filter");
+	$XD.setDataAttr(aFilterEl, "from", 0);
+	$XD.setDataAttr(aFilterEl, "to", 0);
+	$XH.addClass(aFilterEl, "disable");
+	tryExecuteTool("filter", ["",{from :0, to : 0}]);
+}]]);
+
+IX.ns("PCC.GridTools");
+PCC.GridTools.showTools = showGridTools;
+PCC.GridTools.enableTools = function(container, ifEnable, arrbtnStatus){
+	jQuery($X(container)).find(".chkEnable")[ifEnable?"removeClass":"addClass"]("disable");
+	if(arrbtnStatus)
+		IX.map(arrbtnStatus, function(btn){
+			if(btn) jQuery($X(container)).find(".btn-"+btn+".chkEnable").removeClass("disable");
+		});
+};
+</script>
+<tpl id="pathNav">
+	<div class="showNode"><tpl id="paths">
+		<a class="{clz}" data-href= "{href}">{text}</a>
+		<div class="node-space"></div>
+	</tpl><tpl id="curpath">
+		<div>{text}</div>
+	</tpl></div>
+</tpl>
+<script>
+var navPathTexts = {
+	"jobs" : "作业服务",
+	"job" : "作业管理",
+	"current": "当前作业",
+	"history" : "历史作业",
+	"service" : "服务管理",
+	"nodes" : "计算节点",
+	"channels" : "录像管理",
+	"logs" : "系统日志"
+};
+var navPathHrefs = {
+	"nodes" : "nodes",
+	"jobs" : "jobs",
+	"job" : "jobs",
+	"current": "jobs",
+	"history" : "job-history",
+	"service" : "job-service"
+};
+function showPathNav(container, moduleArr, subName){
+	var paths = [];
+	IX.map(moduleArr, function(module, index){
+		paths.push({text : navPathTexts[module],clz : index ===0 ? "name": "", href : ixwPages.createPath(navPathHrefs[module])});
+	});
+	if(subName){
+		paths.push({text : subName, href : ""});
+	}
+	var curpath = paths.length >0 ? [paths.pop()]:[];
+	if($X(container)){
+		$X(container).innerHTML = t_pathNav.renderData("", {
+			paths : paths,
+			curpath : curpath
+		});
+	}
+}
+IX.ns("PCC.PathNav");
+PCC.PathNav.showPathNav = showPathNav;
+</script>

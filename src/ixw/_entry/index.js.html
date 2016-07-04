@@ -1,0 +1,117 @@
+<tpl id="login">
+	<div class="bg login-bg"><img src="{background}"></div>
+	<div class="container">
+		<ul id="loginDialog" class="l">
+			<li class="title">视频云计算管理平台</li>
+			<li>
+				<span class="pic-user"></span>
+				<input type="text" id="account" tabindex="1">
+				<label id="account-p">请输入用户名</label>
+			</li>
+			<li>
+				<span class="pic-psd"></span>
+				<input type="password" id="password" tabindex="2">
+				<label id="password-p">请输入密码</label>
+			</li>
+			<li class="btn">
+				<a id="submit" tabindex="3" data-href="$login">登录</a>
+			</li>
+		</ul>
+		<div class="r rightBg" id="right-bg"><img src="{rightBack}"></div>
+	</div>
+	<div class="footer">
+		<div class="copy">
+			<div class="logo"></div>
+			<div>东方网力科技股份有限公司</div>
+			<div class="copy-small">NetPosa Technologies Ltd</div>
+		</div>
+	</div>
+</tpl>
+<script>
+function saveUserInfoCookie(){
+	var username = $X('account').value;
+	var password = $X('password').value;
+	jQuery.cookie("account", username);
+	jQuery.cookie("password", password);
+}
+function clearCookie(){
+	jQuery.cookie("account", "", { expires: -1 });
+	jQuery.cookie("password", "", { expires: -1 });
+}
+var ixwPages = IXW.Pages;
+IXW.Actions.configActions([["login", function(){
+	var username = $X('account').value;
+	var password = $X('password').value;
+	PCC.Global.entryCaller("login", {
+		username :username,
+		password : password
+	}, function(data){
+		saveUserInfoCookie();
+		PCC.Env.resetSession(data);
+		ixwPages.load("");
+	});
+}]]);
+function onResize4Body(){
+	var screenY = document.documentElement.clientHeight-75;
+	var elY = parseInt(jQuery("#loginDialog").css("height"));
+	var marginY = Math.round((screenY - elY)/2);
+	var marginTop = Math.round((screenY - 658)/2);
+	jQuery("#loginDialog").css("marginTop" , marginY+"px");
+	jQuery("#right-bg").css("marginTop" , marginTop+"px");
+}
+
+IX.ns("PCC.Entry");
+PCC.Entry.clearCookie = clearCookie;
+PCC.Entry.init = function(pageCfg, pageParams, cbFn){
+	//if (PCC.Env.hasSession() || jQuery.cookie("account")){
+	//}
+	PCC.Env.resetSession({id : 1, name : jQuery.cookie("account")});
+	ixwPages.load("");
+	return;
+	// document.body.innerHTML = t_login.renderData("",{
+	// 	background: PCC.Global.backgroundUrl,
+	// 	rightBack : PCC.Global.rightbgUrl
+	// });
+	// onResize4Body();
+	// $Xw.bind({"resize" : onResize4Body});
+	// var aEl = $X("submit");
+	// jQuery('#account-p').bind("click",function(){
+	// 	jQuery('#account').focus();
+	// });
+	// jQuery('#password-p').bind("click",function(){
+	// 	jQuery('#password').focus();
+	// });
+	// jQuery('#account').bind("keydown", function(e){
+	// 	if ( e.which == 13)
+	// 		$X('password').focus();
+	// });
+	// jQuery('#password').bind("keydown", function(e){
+	// 	if ( e.which == 13)
+	// 		ixwPages.jump(aEl);
+	// });
+	// jQuery('#account').bind("focus", function(){
+	// 	var liEl = $XD.ancestor($X('account'), "li");
+	// 	$XH.addClass(liEl, "focus");
+	// 	jQuery('#account-p').hide();
+	// });
+	// jQuery('#account').bind("blur", function(){
+	// 	var liEl = $XD.ancestor($X('account'), "li");
+	// 	$XH.removeClass(liEl, "focus");
+	// 	if(this.value.length === 0){
+	// 		jQuery('#account-p').show();
+	// 	}
+	// });
+	// jQuery('#password').bind("focus", function(){
+	// 	var liEl = $XD.ancestor($X('password'), "li");
+	// 	$XH.addClass(liEl, "focus");
+	// 	jQuery('#password-p').hide();
+	// });
+	// jQuery('#password').bind("blur", function(){
+	// 	var liEl = $XD.ancestor($X('password'), "li");
+	// 	$XH.removeClass(liEl, "focus");
+	// 	if(this.value.length === 0){
+	// 		jQuery('#password-p').show();
+	// 	}
+	// });
+};
+</script>

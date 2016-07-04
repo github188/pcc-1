@@ -1,0 +1,321 @@
+<script>
+var isFoundInArray = IX.Array.isFound;
+var ixwPages = IXW.Pages;
+var ixwActions = IXW.Actions;
+var overviewTransform = IX.CSSVendorName + 'transform:scale({deg});';
+var caller = PCC.Global.sysCaller;
+var checker = null;
+var audioEl = null;
+var count = 0;
+</script>
+<tpl id="page">
+	<div class="topnav">
+		<div class="l logo"><a href="#" class="pic-logo">
+			<span>视频云计算</span>
+		</a></div>
+		<div class="r">
+			<a class="link hide" data-href="{}"><span class="pic-message"></span></a>
+			<a class="link" data-href="{alarmHref}"><span class="pic-alarm"></span><span class="num">{alarmNum}</span><audio id="audio" src="{src}"></audio></a>
+			<a class="link open" data-href="$pcc.toggleVoice" data-key="open"><span class="pic-voice"></span></a>
+			<a class="profile"><span class="pic-avatar"></span><span class="text">{username}</span></a>
+			<span class="rborder"></span>
+			<a class="link" data-href="$logout"><span class="logout"></span></a>
+		</div>
+	</div>
+	<nav>
+		<ul class="top"><tpl id="nav"><li id="nav-{name}" class="{clz}">
+			<a data-href="{navHref}">
+				<span class="nav-{name}"></span><span>{text}</span><span class="r ico-arrow"></span>
+			</a>
+		</li></tpl></ul>
+		<div class="copyright">
+			<span>当前版本号：1.0</span>
+		</div>
+	</nav>
+	<div id="body"></div>
+	<div class="pg-footer"></div>
+</tpl>
+<script>
+var isLogout = false;
+function SessionManager(data){
+	var sessionData = data;
+	var userName = $XP(data, "name", "");
+	var userId = $XP(data, "id", null);
+	var enabledModules = $XP(data, "modules", []);
+
+	return {
+		hasAuth : function(){return userId !== null;},
+		getUserName : function(){return userName;},
+		getUserId : function(){return userId;},
+		isLogout : function(){return isLogout;},
+		checkIfModuleEnabled : function(module){ return isFoundInArray(module, enabledModules);}
+	};
+}
+var sessionMgr = new SessionManager();
+
+var NavItems = [
+["overview", "系统概况"],
+["nodes",  "计算节点"],
+["jobs",   "作业服务"],
+["algorithms",   "算法模块"],
+["groups",   "群组用户"],
+// ["statics",   "统计分析"],
+["logs",   "系统日志"]
+];
+var DefaultNav = "nodes";
+function NavManager(focusedNavName){
+	var focused = focusedNavName || DefaultNav;
+	function _getNavItemTplData(name, item){
+		return {
+			name : name,
+			text : item[1],
+			clz : (focused == name ? "active": ""),
+			navHref : ixwPages.createPath(name)
+		};
+	}
+	function _focus(itemName){
+		if (itemName !=="overview"){
+			var lastChar = itemName.charAt(itemName.length-1);
+			if (lastChar !== "s") itemName = itemName + "s";//作用是得到class为active的nav(详情页返回的itemName都是去掉s后的)
+		}
+		var el = $X('nav-' + itemName) ;
+		if (itemName == focused || !el)
+			return;
+		$XH.removeClass($X("nav-" + focused), "active");
+		focused = itemName;
+		$XH.addClass(el, "active");
+	}
+
+	function enableHover(){
+		jQuery("nav li").hover(function(){
+			$XH.addClass(this, "hover");
+		}, function(){
+			$XH.removeClass(this, "hover");
+		});
+	}
+
+	return {
+		getRenderData : function(){ return IX.loop(NavItems, [], function loopNavItem(acc, item){
+			var name = item[0];
+			/*if (name == "home" || sessionMgr.checkIfModuleEnabled(name))*/
+				acc.push(_getNavItemTplData(name, item));
+			return acc;
+		});},
+		enableHover : enableHover,
+		focus : _focus
+	};
+}
+var navMgr = new NavManager();
+
+function clearSession(){
+	sessionMgr = new SessionManager();
+	isLogout = true;
+	IXW.Pages.load("entry");
+}
+function startSession(data){
+	sessionMgr = new SessionManager(data);
+	var alarmNum = 0;
+	document.body.innerHTML = t_page.renderData("",{
+		nav : navMgr.getRenderData(),
+		alarmHref : ixwPages.createPath("logs"),
+		src : PCC.Global.alertorUrl,
+		alarmNum : alarmNum,
+		username : $XP(data, "name", "")
+	});
+	/*caller("getPrompt", {},function(promptData){
+		alarmNum = $XP(data, "alarmNum", 0);
+		var numEl = jQuery(".topnav .num");
+		numEl.html(alarmNum);
+		numEl[alarmNum ? "removeClass" : "addClass"]("hide");
+	});*/
+	navMgr.enableHover();
+	function _checkerFn(cbFn){
+		caller("getPrompt", {}, function(data){
+			var alarmNum = $XP(data, "alarmNum", 0);
+			var numEl = jQuery(".topnav .num");
+			numEl.html(parseInt(alarmNum) + count);
+			if (alarmNum && jQuery(".topnav .open").length > 0 && audioEl) {
+				audioEl.play();
+				setTimeout(function(){audioEl.pause();}, 1000);
+			}
+			cbFn();
+		}, function(){
+			checker.stop();
+		});
+	}
+	if (!checker)
+		checker = new PCC.Util.PeriodicChecker(_checkerFn, 1000);
+	checker.start();
+}
+function switchout(){
+
+}
+var PagesConfiurations = IX.map([
+//{type?, name+, path?, bodyClz?, needAuth?},
+{type: "ErrPage", name: "401", bodyClz: "exception", needAuth : false},
+{type: "ErrPage", name: "404", bodyClz: "exception", needAuth : false},
+
+{name: "overview", isDefault: true, bodyClz:"overview"},
+
+{type: "Node", name: "nodes", bodyClz:"nodes"},
+{name: "node-info", path: "node/{id}/info", bodyClz : "nodeInfo"},
+{name: "node-job", path: "node/{id}/jobs", bodyClz : "nodeJob"},
+{name: "node-service", path: "node/{id}/services", bodyClz:"nodeService"},
+{name: "node-monitor", path: "storagenode/{id}/monitor", bodyClz: "nodeMonitor"},
+
+{type: "Job", name: "jobs", bodyClz:"job-current"},
+{name: "job-current", path: "job/currentJobs",bodyClz:"currentJob"},
+{name: "job-current-node", path: "job/current/{id}/nodes",bodyClz:"node"},
+{name: "job-current-param", path: "job/current/{id}/param",bodyClz:"param"},
+{name: "job-history", path : "job/historyJobs", bodyClz:"job-history"},
+{name: "job-history-node", path: "job/history/{id}/nodes",bodyClz:"node"},
+{name: "job-history-param", path: "job/history/{id}/params",bodyClz:"param"},
+{name : "job-service", path : "job/services", bodyClz:"service-service"},
+{name : "job-service-node", path : "job/service/{id}/nodes", bodyClz:"node"},
+
+{type: "Algorithm", name: "algorithms", bodyClz:"algorithm"},
+{name: "algorithm-node", path: "algorithm/{id}", bodyClz:"algorithm-node"},
+{name: "algorithm-node-details", path: "algorithm/{id}/node/{nodeId}", bodyClz:"algorithm-node-details"},
+
+{type: "Group", name: "groups", bodyClz:"group"},
+{name: "group-user", path: "group/{id}", bodyClz:"group-user"},
+
+/*{type: "Stat", name: "statics"},
+
+{name : "log-msg", path : "log/msg", bodyClz:"msg"},
+{name : "log-operation", path : "log/operation", bodyClz:"operation"},*/
+{type: "Log", name: "logs", bodyClz:"logs"},
+
+{name: "entry", bodyClz: "entry", needAuth : false}
+], function(item){
+	var name = item.name;
+	var moduleName = name.split("-")[0];
+	var className = item.type || moduleName.capitalize();
+	return IX.inherit({
+		initiator : "PCC." + className + ".init",
+		path : name,
+
+		nav : "service",
+		navItem : moduleName,
+
+		needAuth : true
+	}, item);
+});
+
+ixwActions.configActions([["logout", function(){
+	if (!window.confirm("确认是否退出?"))
+		return;
+	//CCS.Global.entryCaller("logout", {}, function(){
+		PCC.Entry.clearCookie();
+		clearSession();
+		switchout();
+	//});
+}], ["pcc.toggleVoice", function(params, el){
+	if($XH.hasClass(el,"open")){
+		$XH.removeClass(el,"open");
+		$XH.addClass(el,"mute");
+	}else if($XH.hasClass(el,"mute")){
+		$XH.removeClass(el,"mute");
+		$XH.addClass(el,"open");
+	}
+}]]);
+
+function loadSession(pageFn){
+	//CCS.Global.commonCaller("session", {}, function(data){
+		//if (!data || !data.id)
+			//return ixwPages.load("entry");
+		//startSession(data);
+		//pageFn();
+	//});
+	if(!jQuery.cookie("account"))
+		return ixwPages.load("entry");
+	startSession({id : 1, name : jQuery.cookie("account")});
+	pageFn();
+}
+function onResize4Body(){
+	var bodyHeight =document.documentElement.clientHeight;
+	var height = 0;
+	var bodyWidth = document.documentElement.clientWidth;
+	var bodyPadding = 0, topnavH = 50, cardH = 48;
+	if($X('gridContainer')){
+		var infoH = 125, pathH = 50, toolH = 55, pgH = 45;
+		if($XH.first($XD.first($X('body'), "div"), "info")){
+			if($XH.hasClass($X('gridContainer'), "nobuttonPage")){
+				cardH = 68;
+				height = bodyHeight-pathH -topnavH - infoH - cardH  - pgH;
+				jQuery("#gridContainer").height(height + pgH);
+			}else{
+				height = bodyHeight -topnavH-pathH - infoH - cardH - toolH  - pgH ;
+				jQuery("#gridContainer").height(height  + pgH);
+			}
+		}else{
+			toolH = 69;pathH = 0;
+			height = bodyHeight -topnavH-pathH- toolH-40 -70;
+			jQuery("#gridContainer").height(height+ pgH);
+		}
+		if($XH.first($X('gridContainer'), "nv-grid")){
+			jQuery("#gridContainer").height("auto");
+			var grid = jQuery("#body .ixw-grid");
+			if(jQuery("#itemList").height() < height-44){
+				grid.height(height);
+			}else{
+				grid.height("auto");
+			}
+		}
+	}else if($XH.first($X('body'), "p_stat")){
+		height = bodyHeight - topnavH - bodyPadding - cardH;
+		if(height < 570) height = 570;
+		jQuery($XH.first($XH.first($X('body'), "p_stat"), "active")).height(height);
+	}
+}
+function onScroll4Body(){
+	if($X('compare')){
+		var scrollLeft = $Xw.getScreen().scroll[0];
+		if(scrollLeft){
+			jQuery(".detail-time").css({left:-scrollLeft + "px"});
+		}else{
+			jQuery(".detail-time").css({left:0});
+		}
+	}
+}
+IX.ns("PCC.Env");
+PCC.Env.init = function(){
+	ixwPages.listenOnClick(document.body);
+	ixwPages.configPages(PagesConfiurations, function(pageName, pageCfg){
+		return !$XP(pageCfg, "needAuth", true) || sessionMgr.hasAuth();
+	});
+
+	IXW.Navs.register("service", function(cfg){
+		navMgr.focus(cfg.navItem || "");
+	});
+
+	loadSession(function(){
+		ixwPages.start();
+	});
+};
+PCC.Env.isMe = function(userId){return userId === sessionMgr.getUserId();};
+PCC.Env.isLogout = function(){return sessionMgr.isLogout();};
+PCC.Env.reloadSession = function(){
+	loadSession(function(){
+		ixwPages.reload();
+	});
+};
+PCC.Env.clearSession = clearSession;
+PCC.Env.hasSession = function(){return sessionMgr.hasAuth();};
+PCC.Env.resetSession = function(data){startSession(data);};
+PCC.Env.clearAlarmNum = function(){
+	count = 0;
+	jQuery(".topnav .num").html(count);
+};
+PCC.Env.onResize4Body = onResize4Body;
+
+var appInitialized = false;
+PCC.init = function(){
+	if (appInitialized)
+		return;
+	appInitialized = true;
+	$Xw.bind({"resize" : onResize4Body});
+	$Xw.bind({"scroll" : onScroll4Body});
+	PCC.Env.init();
+};
+</script>

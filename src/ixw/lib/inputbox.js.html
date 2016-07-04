@@ -1,0 +1,113 @@
+
+
+<tpl id="dropdownBox">
+	<span class="dropdown">
+		<input type="hidden" id="{inputId}" class="{inputClz}" type="text" value="{key}">
+		<button type="button" class="dropdown-toggle {clz}" data-toggle="dropdown">
+			<span class="value">{value}</span>
+			<span class="drop-pic"></span>
+		</button>
+		<ul class="dropdown-menu {clz}"><tpl id="availRsrcs">
+			<li class="dropdown-item" title="{title}"><a data-href="${action}" data-type="{type}" data-key="{key}">{html}</a></li>
+		</tpl></ul>
+	</span>
+</tpl>
+<script>
+//下拉框
+/*
+填写默认值，若baseInfo中有定义，则覆盖默认值，可以避免baseInfo没有该值，导致不能正确渲染。
+baseInfo : 每个下拉框类别基础的信息
+*/
+function isInputNull(el, dropdownEl){
+	var value = el.value;
+	$XH[value ? "removeClass" : "addClass"](dropdownEl, "requiredMark");
+	return value;
+}
+function bindonDropdown(el){
+	var dropdownEl = $XH.first($XH.ancestor(el, "dropdown"), "dropdown-toggle");
+	IX.bind(dropdownEl, {
+		blur : function(e){
+			setTimeout(function(){isInputNull(el, dropdownEl);}, 150);
+		}
+	});
+}
+function prevent(e){
+	IX.Util.Event.preventDefault(e);
+}
+function bindOnMouseWheel(contentEl){
+	IX.bind(document.body, {
+		mousewheel : prevent
+	});
+	var dropdownMenu = jQuery(contentEl).find("ul.dropdown-menu");
+	IX.map(dropdownMenu, function(item){
+		IX.bind(item, {
+			mousewheel : function(e){
+				e = e || window.event;
+				IX.Util.Event.stopPropagation(e);
+				var delta = 0;
+				if(e.wheelDelta){
+					delta = e.wheelDelta;
+				}else if(e.detail){
+					delta = e.detail;
+				}
+				var scrollTop = $XH.getScroll(item).scrollTop;
+				var innerHeight = jQuery(item).innerHeight();
+				if((scrollTop === 0 && delta > 0) || (innerHeight +scrollTop >=item.scrollHeight && delta <0)){
+					IX.Util.Event.preventDefault(e);
+					return false;
+				}
+			}
+		});
+	});
+}
+var globalActionConfig = IXW.Actions.configActions;
+
+function getRsrcHTML(type,baseInfo, data, action, ifObject){
+	var availRsrc = IX.map(data, function(item){
+		var name = "", key="";
+		if(action || ifObject){
+			name = $XP(item, "name", "");
+			key = $XP(item, "id", "");
+		}else{
+			name = item;
+		}
+		return {
+			html : name,
+			title : name,
+			key : key,
+			type : type,
+			action : action ? action : "dropdownBox.chose"
+	};});
+	var clz = $XP(baseInfo, "clz", "");
+	return t_dropdownBox.renderData("",IX.inherit({
+		inputId : "",
+		clz : clz,
+		value : "",
+		key : "",
+	},baseInfo, {
+		availRsrcs : availRsrc
+	}));
+}
+globalActionConfig([["dropdownBox.chose", function(params, el){
+	var dropdownEl = $XH.ancestor(el, "dropdown");
+	if(!dropdownEl) return;
+	var value = el.innerHTML === "空" ? "" :el.innerHTML;
+	var key = $XD.dataAttr(el, "key", "");
+	var valueEl = $XH.first($XH.first(dropdownEl, "dropdown-toggle"), "value");
+	var inputEl = $XD.first(dropdownEl, "input");
+	inputEl.value = key;
+	valueEl.innerHTML = value;
+}]]);
+</script>
+<script>
+IX.ns("PCC.inputBox");
+PCC.inputBox.dropdownBox = function(){
+	return {
+		getDropdownBoxHTML : getRsrcHTML,
+		bindOnMouseWheelAndHover : bindOnMouseWheel,
+		bindonDropdown : bindonDropdown,
+		isInputNull : isInputNull
+	};
+};
+
+</script>

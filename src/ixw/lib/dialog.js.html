@@ -1,0 +1,194 @@
+<tpl id="okcancel">
+	<a class="btn okbtn">确定</a>
+	<a class="btn cancelbtn">取消</a>
+</tpl>
+<tpl id="editbtns">
+	<a class="btn okbtn">编辑</a>
+	<a class="btn cancelbtn">关闭</a>
+</tpl>
+<tpl id="alertbtns">
+	<a class="btn confirmbtn">确定</a>
+</tpl>
+<tpl id="commonDialog">
+	<div class="content">{content}</div>
+	<div class="btns">{btns}</div>
+</tpl>
+<script>
+var dialog = null, dialogAlert = null;
+var dialogCfg = null, dialogCfgAlert = null; // {content(), btns(), okFn(fn), bindOn()}
+
+var okcancelHTML = t_okcancel.renderData("", {});
+var editbtnsHTML = t_editbtns.renderData("", {});
+var alertbtnsHTML = t_alertbtns.renderData();
+function prevent(e){
+	IX.Util.Event.preventDefault(e);
+}
+function clickOnBtn(e){
+	var btnEl = $XH.ancestor(e.target, "btn");
+	if (!btnEl) return;
+	if ($XH.hasClass(btnEl, "cancelbtn")){
+		IX.unbind(document.body, {
+			mousewheel : prevent
+		});
+		return dialog.hide();
+	}
+	if ($XH.hasClass(btnEl, "confirmbtn")){
+		IX.unbind(document.body, {
+			mousewheel : prevent
+		});
+		return dialog.hide();
+	}
+	if($XH.hasClass(btnEl, "disable"))
+		return;
+	if($XH.hasClass(btnEl, "exportbtn")){
+		var exportFn = $XF(dialogCfg, "exportFn");
+		exportFn();
+		return;
+	}
+	var okFn = $XF(dialogCfg, "okFn");
+	okFn(function(){
+		IX.unbind(document.body, {
+			mousewheel : prevent
+		});
+		dialog.hide();
+	}, function(){
+		$XH.addClass(btnEl, "disable");
+	});
+}
+function clickOnBtn4Alert(e){
+	var btnEl = $XH.ancestor(e.target, "btn");
+	if (!btnEl) return;
+	var okFn = $XF(dialogCfgAlert, "okFn");
+	okFn(function(){dialogAlert.hide();});
+}
+
+function dialogBodyRefresh(bodyEl){
+	var content = dialogCfg.content;
+	if (IX.isFn(content))
+		content =content();
+	var btns = dialogCfg.btns;
+	if (IX.isEmpty(btns))
+		btns = okcancelHTML;
+	else if(IX.isFn(btns))
+		btns = btns();
+
+	bodyEl.className = "ixw-body " + dialogCfg.clz;
+	bodyEl.innerHTML = t_commonDialog.renderData("", {
+		content : content,
+		btns : btns
+	});
+	IX.bind($XH.first(bodyEl, "btns"), {
+		click : clickOnBtn
+	});
+	var bindOn = $XF(dialogCfg, "bindOn");
+	bindOn($XH.first(bodyEl, "content"));
+}
+function dialogBodyRefresh4Alert(bodyEl){
+	var content = dialogCfgAlert.content;
+	if (IX.isFn(content))
+		content =content();
+	var btns = dialogCfgAlert.btns;
+	if (IX.isEmpty(btns))
+		btns = okcancelHTML;
+	else if(IX.isFn(btns))
+		btns = btns();
+
+	bodyEl.className = "ixw-body " + dialogCfgAlert.clz;
+	bodyEl.innerHTML = t_commonDialog.renderData("", {
+		content : content,
+		btns : btns
+	});
+	IX.bind($XH.first(bodyEl, "btns"), {
+		click : clickOnBtn4Alert
+	});
+	var bindOn = $XF(dialogCfgAlert, "bindOn");
+	bindOn($XH.first(bodyEl, "content"));
+}
+/** cfg :{
+	dialogClz
+	content,
+	btns,
+	okFn,
+	bindOn
+ * }
+ */
+function showDialog(cfg){
+	if (!dialog)
+		dialog = new IXW.Lib.ModalDialog({
+			id : "nv-dialog",
+			bodyRefresh : dialogBodyRefresh
+		});
+	dialogCfg = cfg;
+	dialog.show();
+}
+function showDialogAlert(cfg){
+	if (!dialogAlert)
+		dialogAlert = new IXW.Lib.ModalDialog({
+			id : "nv-dialogAlert",
+			bodyRefresh : dialogBodyRefresh4Alert
+		});
+	dialogCfgAlert = cfg;
+	dialogAlert.show();
+}
+IX.ns("PCC.Dialog");
+PCC.Dialog.show = showDialog;
+PCC.Dialog.hide = function(){if (dialog)dialog.hide();};
+</script>
+<tpl id="confirm">
+	<div class="title">{title}</div>
+	<div class="area confirm">
+		<div class="msg">{msg}</div>
+	</div>
+</tpl>
+<tpl id="alert">
+	<div class="title">错误提示</div>
+	<div class="area alert">
+		<div class="msg">{msg}</div>
+	</div>
+</tpl>
+<tpl id="postComment">
+	<div class="title">备注</div>
+	<div class="area"><div><textarea id="commentArea"></textarea></div></div>
+</tpl>
+<script>
+PCC.Dialog.confirm = function(title,msg, okFn){showDialog({
+	clz : "confirmDialog",
+	content : function(){
+		return t_confirm.renderData("", {title : IX.encodeTXT(title),msg: IX.encodeTXT(msg)});
+	},
+	okFn : function(cbFn, btndisableFn){
+		if(IX.isFn(btndisableFn)) btndisableFn();
+		okFn(cbFn);
+	}
+});};
+PCC.Dialog.alert = function(msg, cbFn){showDialogAlert({
+	clz : "alertDialog",
+	content : function(){
+		return t_alert.renderData("", {msg: msg ?msg.replaceAll("\n", "<br>") : ""});
+	},
+	btns : alertbtnsHTML,
+	okFn : function(hidecbFn){
+		hidecbFn();
+		if(IX.isFn(cbFn)) cbFn();
+	}
+});};
+
+
+var postCommentHTML = t_postComment.renderData("", {});
+function _tryPostComment(okFn, cbFn){
+	var comment = $X('commentArea').value;
+	// if(IX.isEmpty(comment)){
+	// 	alert("请输入备注信息！");
+	// 	return;
+	// }
+	okFn(comment);
+	cbFn();
+}
+PCC.Dialog.postComment = function (okFn){showDialog({
+	clz : "commentDialog",
+	content : postCommentHTML,
+
+	okFn : function(cbFn){_tryPostComment(okFn, cbFn);}
+});};
+</script>
+

@@ -1,0 +1,349 @@
+<script>
+var caller = PCC.Global.nodeCaller;
+var filterCaller = PCC.Global.jobCaller;
+var ixwPages = IXW.Pages;
+var globalActionConfig = IXW.Actions.configActions;
+var pccDialog = NV.Dialog;
+var showDialog = NV.Dialog.show;
+var hideDialog = NV.Dialog.hide;
+
+var values = null;
+var updateGridInterval = null;
+
+//针对没有按钮的列表
+var GridCfgs = {
+	job : {
+		clz : "nodeJobGrid",
+		columns : ["_no","jobName","taskInfo","algorithm","group","user"]
+	},
+	service : {
+		clz : "nodeServiceGrid",
+		columns : ["_no", "serviceName","handleNum","waitNum"]
+	}
+};
+var  InfoTexts = {
+	job : {
+		listCaller : "listJobs4Node"
+	},
+	service : {
+		listCaller : "listServices4Node"
+	}
+};
+function refreshGrid(grid,pageNo){
+	var body = document.documentElement;
+	var screenY = body.clientHeight - $X('gridContainer').offsetTop;
+	var screenX = body.clientWidth - 280;
+	jQuery(".ixw-grid").addClass("opcity");
+	$X('refreshLoading').style.top = screenY/2-24 + "px";
+	$X('refreshLoading').style.left = screenX/2 -24  + "px";
+	$XH.removeClass($X('refreshLoading'), "hide");
+	grid.refresh(pageNo);
+}
+</script>
+<tpl id="page">
+	<div id="gridTools" class="grid-tools"></div>
+	<div id="gridContainer"><img id="refreshLoading" class="loading" src="{imgUrl}"></div>
+	<div class="test"></div>
+</tpl>
+<tpl id="cpu">
+	<div class="area">
+		<div>
+			<span class="label">可用线程数</span><input id="usableCPU"><span class='mark'>*</span><span class="mark">{used}-{total}</span>
+		</div>
+	</div>
+</tpl>
+<script>
+function initCPUPanel(){
+	return new IXW.Lib.PopTrigger({
+		id : "cpuInfoPanel",
+		position : "top",
+		triggerMode : "",
+		ifKeepPanel : function(target){return true;},
+		bodyRefresh : function(bodyEl, triggerEl){
+
+		}
+	});
+}
+function ifInArrayStatus(status,  arr){
+	var isDisabled = false;
+	IX.map(arr, function(item){
+		if(status === item){
+			isDisabled = true;
+		}
+	});
+	return isDisabled;
+}
+function getDisableActs(rowData){
+	var deleteNodes;
+	var status = rowData.status;
+	deleteNodes = ifInArrayStatus(status, [0]);
+	return {
+		"delete" : deleteNodes
+	};
+}
+function bindOnValue(used, total){
+	var usableCPUEl = $X("usableCPU");
+	IX.bind(usableCPUEl, {
+		blur : function(){
+			$XH[usableCPUEl.value ? "removeClass":"addClass"](usableCPUEl, "requiredMark");
+			$XH[usableCPUEl.value > total ||  usableCPUEl.value < used? "addClass" : "removeClass"](usableCPUEl, "requiredMark");
+		},
+		keypress : function(e){
+			var value = usableCPUEl.value;
+			if(e.keyCode<48 || e.keyCode>57){
+				e.returnValue = false;
+			}
+		},
+		keyup : function(e){
+			usableCPUEl.value = usableCPUEl.value.replace(/\D/g, '');
+		}
+	});
+}
+function _cpuOkFn(nodeId, grid){
+	var usableCPUEl = $X("usableCPU");
+	if($XH.hasClass(usableCPUEl,"requiredMark") || !usableCPUEl.value){
+		$XH.addClass(usableCPUEl, "requiredMark");
+		return;
+	}
+	caller("editUsableCPU", {id : nodeId, usableCPU : usableCPUEl.value}, function(){
+		refreshGrid(grid);
+	});
+}
+function showNodes(cbFn){
+	$X('body').innerHTML = t_page.renderData("", {imgUrl : PCC.Global.refreshIntervalUrl});
+	var options = {status : 2};
+	var grid = new PCC.Grid.NVGrid(IX.inherit({
+		container : "gridContainer",
+		clz : "nodeGrid",
+		columns : [ "_checkbox", "_no", "nodeName","ip","cpuUsage", "memUsage", "gpuUsage", "flow", "nodeStatus"],
+		actions : [["delete", "删除", function(rowModel){
+			pccDialog.confirm("删除节点", "确认删除" + rowModel.get("name")+"吗？", function(cbFn){
+				caller("deleteStorageNodes", {ids : [rowModel.getId()]}, function(){
+					cbFn();
+					grid.refresh();
+				});
+			});
+		}], ["config", "资源配置", function(rowModel){
+			var cpuInfo = rowModel.get("cpu");
+			var used = $XP(cpuInfo, "used");
+			var total = $XP(cpuInfo, "total");
+			showDialog({
+				title : "资源配置",
+				content : t_cpu.renderData("", {used : used, total : total}),
+				listen : {
+					ok : function(){
+						var nodeId = rowModel.getId();
+						_cpuOkFn(nodeId, grid);
+					}
+				},
+				bindOn : function(contentEl){
+					bindOnValue(used, total);
+				}
+			});
+		}]],
+		dataLoader : function(params, cbFn){
+			caller("listNodes", IX.inherit(params, options), cbFn, function(){
+				switchOut();
+			});
+		},
+		clickOnRow : function(rowId, cellName, cellEl){
+			ixwPages.load(ixwPages.createPath("node-info", {id : rowId}));
+		},
+		onselect : function(){
+			var ids = [];
+			IX.map(grid.getSelectedRows(), function(rowModel){
+				if(rowModel.get("status")) ids.push(rowModel.getId());
+			});
+			PCC.GridTools.enableTools("gridTools",ids.length>0);
+			//var ids = grid.getModel().getSelectedIds();
+			/*var curpageIds = IX.map(grid.getSelectedRows(), function(rowModel){
+				return rowModel.getId();
+			});
+			var curpage = grid.getCurPageNo();
+			var items = grid.getModel().getSelectedItems();
+			var ids = [];
+			for(var i=0; i< items.length; i++){
+				if(items[i].page === curpage) items[i].value = curpageIds;
+				ids.concat(items[i].value);
+			}*/
+			//ids = distinct(ids.concat(curpageIds));
+			//PCC.GridTools.enableTools("gridTools",ids.length>1, ids.length>0);
+		},
+		ifactionsEnable : function(rowData){
+			return getDisableActs(rowData);
+		},
+		itemPageName : "nodes"
+	}));
+	PCC.Grid.currentGrid = {
+		refresh :function(){
+			refreshGrid(grid);
+		},
+		"delete" : function(){
+			var ids = [];
+			var names = "";
+			IX.map(grid.getSelectedRows(), function(rowModel){
+				if(rowModel.get("status")){
+					ids.push(rowModel.getId());
+					names = names +rowModel.get("name") + "、" ;
+				}
+			});
+			if(names) names = names.substring(0, names.length-1);
+			pccDialog.confirm("删除节点", "确认删除"+names+"吗？", function(cbFn){
+				caller("deleteStorageNodes", {ids : ids}, function(){
+					cbFn();
+					grid.setSelectedIdsNull();
+					grid.refresh();
+				});
+			});
+		},
+		filter : function(_options){
+			var type = $XP(_options, "type", "status");
+			var value = $XP(_options, "key", "");
+	
+			options[type] = value;
+
+			//options = _options;
+			refreshGrid(grid,0);
+		},
+		search : function(value){
+			grid.search(value);
+		}
+	};
+	//PCC.PathNav.showPathNav("pathNav", "nodes");
+	PCC.GridTools.showTools("gridTools", {
+		buttons: ["refresh", "delete"],
+		type : "node",
+		search : true,
+		filter : ["status"]
+	});
+	PCC.Env.onResize4Body();
+	grid.show(/*function(){
+		updateGridInterval = setInterval(grid.refresh, 5000);
+	}*/);
+	cbFn();
+}
+</script>
+<tpl id="nodeInfo">
+	<div class="first"><span class="label">CPU类型</span><span class="value">{cpuType}</span></div>
+	<div><span class="label">CPU主频</span><span class="value">{cpuClockSpeed}</span></div>
+	<div><span class="label">CPU处理器</span><span class="value">{cpu}</span></div>
+	<div><span class="label">内存</span><span class="value">{mem}</span></div>
+	<div><span class="label">操作系统</span><span class="value">{os}</span></div>
+	<div><span class="label">宽带</span><span class="value">{broadband}</span></div>
+	<div><span class="label">添加时间</span><span class="value">{addTime}</span></div>
+</tpl>
+<tpl id="subpage">
+<div class="p_node">
+	<div id="pathNav"></div>
+	<div class="card-switch titlebar">
+		<a class="{infoActiveClz}" data-href="{infoHref}"><span>节点信息</span></a>
+		<a class="{jobActiveClz}" data-href="{jobHref}"><span>作业情况</span></a>
+		<a class="{serviceActiveClz}" data-href="{serviceHref}"><span>服务情况</span></a>
+		<a class="{monitorActiveClz} hide" data-href="{monitorHref}"><span>统计分析</span></a>
+	</div>
+	<div id="gridTools" class="grid-tools {toolClz}"></div>
+	<div id="gridBody" class="{gridBodyClz}"><div id="gridContainer" class="nobuttonPage"></div></div>
+</div>
+</tpl>
+<script>
+function _showGrid(container, type, _params, name){
+	var  textInfo = InfoTexts[type], gridCfg = GridCfgs[type];
+	var options = {algorithm : 2, group : 2};
+	var grid =  new PCC.Grid.CommonGrid(container, {
+		grid : IX.inherit(gridCfg, {
+			dataLoader : function(params, cbFn){
+				caller(textInfo.listCaller, IX.inherit(_params, params, options), cbFn, function(){
+					switchOut();
+				});
+			}
+		}),
+		itemPageName : type
+	});
+	PCC.Grid.currentGrid = {
+		filter : function(_options){
+			var type = $XP(_options, "type", "status");
+			var value = $XP(_options, "key", "");
+	
+			options[type] = value;
+			refreshGrid(grid, 0);
+		}
+	};
+	PCC.PathNav.showPathNav("pathNav", ["nodes"], name);
+	if(type === "job"){
+		filterCaller("getAlgoAndGroup", _params, function(filterData){
+			PCC.GridTools.showTools("gridTools", {
+				type : type,
+				filter : ["group", "algorithm"]
+			}, filterData);
+		});
+	}
+
+	grid.show(/*function(){
+		updateGridInterval = setInterval(grid.refresh, 5000);
+	}*/);
+
+}
+function _showNodeInfo(nodeId, type, cbFn){
+	$X('body').innerHTML = t_subpage.renderData("",{
+		infoActiveClz : type === "info" ? "active" : "",
+		infoHref : ixwPages.createPath("node-info", {id : nodeId}),
+		jobActiveClz : type === "job" ? "active" : "",
+		jobHref : ixwPages.createPath("node-job", {id : nodeId}),
+		serviceActiveClz : type === "service" ? "active" : "",
+		serviceHref : ixwPages.createPath("node-service", {id : nodeId}),
+		monitorActiveClz : type === "monitor" ? "active" : "",
+		monitorHref : ixwPages.createPath("node-monitor", {id : nodeId}),
+		toolClz : type ==="service" || type === "info" ? "hide" : "",
+		gridBodyClz : type === "info" ? "nodeInfo" : ""
+	});
+	if(type === "monitor"){
+
+	}else if(type === "info"){
+		caller("getNodeInfo", {id : nodeId}, function(nodeInfo){
+			PCC.PathNav.showPathNav("pathNav", ["nodes"], $XP(nodeInfo, "name", ""));
+			$X('gridBody').innerHTML = t_nodeInfo.renderData("", {
+				cpuType : $XP(nodeInfo, "cpuType", ""),
+				cpuClockSpeed : $XP(nodeInfo, "cpuClockSpeed", ""),
+				cpu : $XP(nodeInfo, "cpu", ""),
+				mem : $XP(nodeInfo, "mem", ""),
+				os : $XP(nodeInfo, "os", ""),
+				broadband : $XP(nodeInfo, "broadband", ""),
+				addTime : $XP(nodeInfo, "addTime", "")
+			});
+		});
+	}else{
+		caller("getNodeName", {id : nodeId}, function(name){
+			_showGrid("gridContainer", type, {id : nodeId}, name);
+		});
+	}
+
+}
+function switchOut(){
+	if(!updateGridInterval) return;
+	clearInterval(updateGridInterval);
+	updateGridInterval=null;
+}
+IX.ns("PCC.Node");
+PCC.Node.init = function(pageCfg, pageParams, cbFn){
+	pageCfg.switchOut = switchOut;
+	var pageName = pageCfg.name;
+	var nodeId = $XP(pageParams,"id");
+	switch(pageName){
+	case "nodes":
+		showNodes(cbFn);
+		break;
+	case "node-info":
+		_showNodeInfo(nodeId, "info", cbFn);
+		break;
+	case "node-job":
+		_showNodeInfo(nodeId, "job", cbFn);
+		break;
+	case "node-service":
+		_showNodeInfo(nodeId, "service", cbFn);
+		break;
+	case "storagenode-monitor":
+		//_showStorageNodeInfo(storageNodeId, "monitor", cbFn);
+		break;
+	}
+};
+</script>

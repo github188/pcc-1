@@ -1,0 +1,9 @@
+{
+	"retCode" : 1,
+	"data" :{
+		"id" : 0,
+		"name" : "管理员",
+		
+		"modules" : ["moduleA", "moduleB"]
+	}
+}
